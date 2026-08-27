@@ -22,71 +22,68 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         webView = new WebView(this);
+
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
 
+        // JavaScript is required by the LAS application.
         settings.setJavaScriptEnabled(true);
+
+        // Required for the application's UI state.
         settings.setDomStorageEnabled(true);
 
-        // Required for loading the local HTML application.
+        // Allow the local HTML application to access its resources.
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
 
+        // Improve Android rendering.
+        settings.setLoadWithOverviewMode(false);
+        settings.setUseWideViewPort(false);
+
+        // Disable browser-style zoom controls.
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
+
+        // Allow media where required by the HTML application.
         settings.setMediaPlaybackRequiresUserGesture(false);
 
+        // Keep navigation inside the WebView.
         webView.setWebViewClient(new WebViewClient());
 
         webView.setWebChromeClient(new WebChromeClient() {
 
             @Override
             public boolean onShowFileChooser(
-                    WebView webView,
-                    ValueCallback<Uri[]> filePathCallback,
-                    FileChooserParams fileChooserParams) {
+                    WebView view,
+                    ValueCallback<Uri[]> callback,
+                    FileChooserParams params) {
 
-                // Cancel any previous file request.
-                if (MainActivity.this.filePathCallback != null) {
-                    MainActivity.this.filePathCallback.onReceiveValue(null);
+                if (filePathCallback != null) {
+                    filePathCallback.onReceiveValue(null);
                 }
 
-                MainActivity.this.filePathCallback = filePathCallback;
+                filePathCallback = callback;
 
-                /*
-                 * Do NOT rely on the MIME type generated from ".las".
-                 *
-                 * Android usually doesn't recognize LAS files as a
-                 * standard MIME type, so the normal WebView chooser can
-                 * hide them.
-                 *
-                 * Instead, open Android's document picker and allow
-                 * arbitrary files.
-                 */
                 Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
 
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
 
+                // LAS is not a standard Android MIME type.
+                // */* ensures LAS files are visible.
                 intent.setType("*/*");
-
-                intent.putExtra(
-                        Intent.EXTRA_MIME_TYPES,
-                        new String[] {
-                                "*/*",
-                                "text/plain",
-                                "application/octet-stream"
-                        }
-                );
 
                 try {
                     startActivityForResult(
                             intent,
                             FILE_CHOOSER_REQUEST
                     );
+
                 } catch (Exception e) {
-                    MainActivity.this.filePathCallback = null;
-                    filePathCallback.onReceiveValue(null);
+
+                    filePathCallback = null;
+                    callback.onReceiveValue(null);
+
                     return false;
                 }
 
@@ -94,7 +91,9 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Load the application included inside the APK.
+        /*
+         * Load the actual LAS application.
+         */
         webView.loadUrl(
                 "file:///android_asset/Index.html"
         );
@@ -124,22 +123,10 @@ public class MainActivity extends Activity {
 
         if (resultCode == RESULT_OK && data != null) {
 
-            /*
-             * Normally we select one LAS file.
-             */
-            if (data.getData() != null) {
+            if (data.getClipData() != null) {
 
-                results = new Uri[] {
-                        data.getData()
-                };
-            }
-
-            /*
-             * Also support multiple selections if Android returns them.
-             */
-            else if (data.getClipData() != null) {
-
-                int count = data.getClipData().getItemCount();
+                int count =
+                        data.getClipData().getItemCount();
 
                 results = new Uri[count];
 
@@ -150,6 +137,12 @@ public class MainActivity extends Activity {
                                     .getItemAt(i)
                                     .getUri();
                 }
+
+            } else if (data.getData() != null) {
+
+                results = new Uri[] {
+                        data.getData()
+                };
             }
         }
 
@@ -169,5 +162,15 @@ public class MainActivity extends Activity {
 
             super.onBackPressed();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+
+        if (webView != null) {
+            webView.destroy();
+        }
+
+        super.onDestroy();
     }
 }
