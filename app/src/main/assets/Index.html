@@ -1,1 +1,2505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LAS Log Viewer (A.M.Thein_Geol)</title>
+<style>
+  :root{
+    --bg:#eef0f3; --panel:#ffffff; --panel2:#eef1f5; --border:#cdd3dc;
+    --text:#1b1e24; --muted:#5b6472; --accent:#1a63d6; --accent2:#0e8f5c;
+    --danger:#c62828; --track-bg:#ffffff; --grid:#dde1e8; --grid-major:#9aa4b5;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px; display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; gap:10px; padding:8px 12px;
+    background:var(--panel); border-bottom:1px solid var(--border); flex-wrap:wrap;
+  }
+  header h1{font-size:14px; margin:0 12px 0 0; font-weight:600; color:var(--accent);}
+  header .grp{display:flex; align-items:center; gap:6px; padding:4px 8px; background:var(--panel2); border-radius:6px;}
+  button{
+    background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px;
+  }
+  button:hover{filter:brightness(0.94);}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#ffffff; font-weight:600;}
+  button.primary:hover{filter:brightness(1.1);}
+  button.small{padding:3px 7px; font-size:11px;}
+  input[type=text], input[type=number], select{
+    background:#ffffff; color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:4px 6px; font-size:12px;
+  }
+  input[type=number]{width:70px;}
+  input[type=file]{display:none;}
+  label.file-label{display:inline-block;}
+  .main{flex:1; display:flex; min-height:0;}
+  #sidebar{
+    width:270px; min-width:220px; background:var(--panel); border-right:1px solid var(--border);
+    overflow-y:auto; padding:10px; flex-shrink:0;
+  }
+  #sidebar h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px;}
+  #sidebar h2:first-child{margin-top:0;}
+  #sidebar{transition:width .25s ease, padding .25s ease; position:relative;}
+  #sidebar.collapsed{width:0 !important; min-width:0; padding-left:0; padding-right:0; border-right:none; overflow:hidden;}
+  .acc-header{cursor:pointer; display:flex; justify-content:space-between; align-items:center; user-select:none;}
+  .acc-header:hover{color:var(--text);}
+  .acc-header .caret{transition:transform .2s ease; font-size:9px;}
+  .acc-header.collapsed .caret{transform:rotate(-90deg);}
+  .acc-wrap{overflow:hidden; max-height:2000px; transition:max-height .25s ease;}
+  .acc-wrap.collapsed{max-height:0;}
+  #sidebarToggle{flex-shrink:0;}
+  #trackHeaderWrap{transition:max-height .25s ease; max-height:300px;}
+  #trackHeaderWrap.collapsed{max-height:0; border-bottom:none;}
+  #trackPanelToggle{flex-shrink:0;}
+  /* ---- Formation Evaluation panel ---- */
+  .fe-row{display:flex; align-items:center; gap:6px; margin-bottom:5px;}
+  .fe-row label{flex:0 0 92px; font-size:11px; color:var(--muted);}
+  .fe-row select, .fe-row input{flex:1; min-width:0; font-size:11px; padding:3px 5px;}
+  .fe-row input[type=number]{width:auto;}
+  .fe-sub{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent2); margin:10px 0 4px;}
+  #feCompute{width:100%; margin-top:8px;}
+  #feResults{
+    margin-top:10px; padding:8px; background:var(--panel2); border:1px solid var(--border); border-radius:6px;
+    font-size:11px; line-height:1.7; display:none;
+  }
+  #feResults .r{display:flex; justify-content:space-between;}
+  #feResults .r b{color:var(--accent2);}
+  #feNote{font-size:10px; color:var(--muted); line-height:1.5; margin-top:8px; font-style:italic;}
+  /* ---- Well Header panel ---- */
+  #wellHeaderTable table{width:100%; border-collapse:collapse; font-size:11px;}
+  #wellHeaderTable td{padding:3px 6px; border:1px solid var(--border);}
+  #wellHeaderTable .wellTitle{font-size:13px; font-weight:700; margin-bottom:6px;}
+  /* ---- Track Editor panel ---- */
+  .track-editor-block{border:1px solid var(--border); border-radius:6px; padding:6px; margin-bottom:8px;}
+  .track-editor-block .teTop{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:11px; font-weight:600;}
+  .track-editor-block .teTop .thBtns button{padding:1px 5px; font-size:10px;}
+  .track-editor-block .curveLines{max-height:none;}
+  .track-editor-block .fillRow{display:flex; align-items:center; gap:4px; font-size:10px; color:var(--muted); margin-bottom:5px; flex-wrap:wrap;}
+  .track-editor-block .fillRow select{font-size:9px; padding:1px 2px; max-width:120px;}
+  .curve-row{
+    display:flex; align-items:center; gap:6px; padding:4px 4px; border-radius:4px; margin-bottom:2px;
+    background:var(--panel2);
+  }
+  .curve-row .name{font-weight:600; font-size:12px; flex:0 0 auto; min-width:52px;}
+  .curve-row .unit{color:var(--muted); font-size:10px;}
+  .curve-row select{flex:1; font-size:11px; min-width:0;}
+  .swatch{width:12px; height:12px; border-radius:2px; flex-shrink:0; border:1px solid #0006;}
+  #fileInfo{font-size:11px; color:var(--muted); line-height:1.5; white-space:pre-wrap;}
+  .viewer{flex:1; display:flex; flex-direction:column; min-width:0; background:var(--track-bg);}
+  #trackHeaderWrap{display:flex; border-bottom:2px solid var(--grid-major); background:var(--panel); flex-shrink:0; overflow:hidden;}
+  #trackBodyWrap{flex:1; overflow-y:auto; overflow-x:hidden; position:relative;}
+  .depthColHeader, .depthCol{width:40px; flex-shrink:0; border-right:1px solid var(--grid-major); background:var(--panel);}
+  .trackHead{
+    flex-shrink:0; border-right:1px solid var(--grid-major); padding:4px 4px 6px; position:relative;
+    background:var(--panel);
+  }
+  .trackHead .thTop{display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;}
+  .trackHead .thTop .idx{color:var(--muted); font-size:10px;}
+  .trackHead .thBtns button{padding:1px 5px; font-size:10px;}
+  .trackHead .curveLines{
+    max-height:120px; overflow-y:auto; overflow-x:hidden; padding-right:2px;
+  }
+  .trackHead .curveLines::-webkit-scrollbar{width:6px;}
+  .trackHead .curveLines::-webkit-scrollbar-thumb{background:#4a5262; border-radius:3px;}
+  .trackHead .curveLine{
+    display:flex; align-items:center; gap:4px; font-size:10px; padding:1px 2px; border-radius:3px; margin-bottom:1px;
+  }
+  .trackHead .curveLine input[type=number]{width:48px; padding:1px 3px; font-size:10px;}
+  .trackHead .curveLine select.scaleType{width:52px; font-size:10px; padding:1px;}
+  .trackHead .curveLine select.styleSel{width:56px; font-size:10px; padding:1px;}
+  .trackHead .curveLine input.widthInput{width:34px; padding:1px 3px; font-size:10px;}
+  .trackHead .curveLine{flex-wrap:wrap;}
+  .trackHead .curveLine .cname{flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .emptyTrack{color:var(--muted); font-size:10px; text-align:center; padding:6px 0;}
+  #addTrackBtn{margin-top:8px; width:100%;}
+  #welcome{
+    flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; color:var(--muted);
+    text-align:center; padding:40px;
+  }
+  #welcome h2{color:var(--text); font-size:20px;}
+  #welcome p{max-width:480px; line-height:1.6; font-size:13px;}
+  #status{padding:4px 12px; background:var(--panel); border-top:1px solid var(--border); font-size:11px; color:var(--muted); flex-shrink:0;}
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-track{background:var(--panel);}
+  ::-webkit-scrollbar-thumb{background:#4a5262; border-radius:5px;}
+  .ccl-badge{display:inline-block; background:#3a2c00; color:#ffcf5c; border:1px solid #6b5200; border-radius:3px; padding:0 4px; font-size:9px; margin-left:4px;}
+  #hoverTooltip{
+    position:fixed; display:none; background:rgba(255,255,255,0.98); border:1px solid var(--border);
+    border-radius:6px; padding:6px 9px; font-size:11px; line-height:1.6; box-shadow:0 3px 10px rgba(0,0,0,0.18);
+    z-index:500; pointer-events:none; max-width:260px;
+  }
+  #hoverCrosshair{
+    position:absolute; left:0; right:0; height:0; border-top:1px dashed var(--accent); display:none;
+    pointer-events:none; z-index:5;
+  }
+  #printHeader{display:none; align-self:flex-start;}
+  #printHeader table{width:100%; border-collapse:collapse; font-size:11px;}
+  #printHeader td{padding:2px 8px; border:1px solid #999;}
+  #printHeader .wellTitle{font-size:15px; font-weight:700; margin-bottom:6px;}
+ 
+@media print{
+  html,body{
+    background:#fff !important; 
+    -webkit-print-color-adjust:exact; 
+    print-color-adjust:exact;
+    margin:0;
+    padding:0;
+  }
+  header,#sidebar,#status,#addTrackBtn,.thBtns,#hoverTooltip,#hoverCrosshair{display:none !important;}
+  
+  /* Make the main content fill the page */
+  .main{
+    display:block !important;
+    height:auto !important;
+    overflow:visible !important;
+    padding:0 !important;
+    margin:0 !important;
+  }
+  
+  .viewer{
+    display:block !important;
+    height:auto !important;
+    overflow:visible !important;
+    padding:0 !important;
+    margin:0 !important;
+  }
+  
+  #printHeader{
+    display:block !important; 
+    padding:auto !important;
+    page-break-after:avoid;
+  }
+  
+  #trackHeaderWrap {
+    page-break-after: avoid !important;
+  }
+  .trackHead {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 
+  #trackBodyWrap{
+    overflow:visible !important;
+    height:auto !important;
+    display:block !important;
+  }
+
+  body,.main,.viewer{
+    height:auto !important; 
+    overflow:visible !important;
+  }
+
+  /* Prevent page breaks inside important elements */
+  #trackHeaderWrap, #trackBodyWrap{
+    page-break-inside:avoid;
+  }
+  
+  svg, rect, line, path, text{
+    -webkit-print-color-adjust:exact; 
+    print-color-adjust:exact; 
+    color-adjust:exact;
+  }
+ 
+  /* Page break controls */
+#trackHeaderWrap, #trackBodyWrap, #printHeader {
+  page-break-inside: avoid;
+  page-break-after: avoid;
+}
+
+/* Ensure the SVG doesn't overflow */
+#svgCanvas {
+  max-width: 100%;
+  height: auto;
+}
+  /* Fix the free space issue */
+  #printHeader{
+    width:100% !important;
+    box-sizing:border-box;
+  }
+}
+
+</style>
+</head>
+<body>
+
+<header>
+  <button id="sidebarToggle" class="small" title="Show/hide side panel" onclick="toggleSidebar()">☰ Panel</button>
+  <h1>⚡ LAS Log Viewer (A.M.Thein_Geol)</h1>
+  <div class="grp">
+    <label class="file-label"><button class="primary" onclick="document.getElementById('fileInput').click()">📂 Open .LAS File</button></label>
+    <input type="file" id="fileInput" accept=".las,.LAS,.txt">
+    <button onclick="loadDemo()">▶ Demo Data (incl. CCL)</button>
+  </div>
+  <div class="grp" id="depthCtrls" style="display:none;">
+    <span>Depth</span>
+    <input type="number" id="depthFrom" step="any">
+    <span>–</span>
+    <input type="number" id="depthTo" step="any">
+    <button class="small" onclick="app.resetDepthRange()">Full</button>
+    <select id="depthPosition" title="Depth track position" style="width:110px;"></select>
+    <input type="number" id="depthGridInterval" placeholder="Auto grid" title="Depth gridline interval (blank = auto)" style="width:70px;">
+    <input type="number" id="depthColWidthInput" title="Depth column width (px)" style="width:55px;" min="20" value="40">
+  </div>
+  <div class="grp" id="zoomCtrls" style="display:none;">
+    <span>Zoom</span>
+    <button class="small" onclick="app.zoom(0.8)">−</button>
+    <input type="number" id="pxPerUnit" step="any" style="width:55px;">
+    <button class="small" onclick="app.zoom(1.25)">+</button>
+    <span>px/unit</span>
+  </div>
+  <div class="grp" id="trackPanelCtrl" style="display:none;">
+    <button id="trackPanelToggle" class="small" onclick="toggleTrackPanel()">▾ Track Scales</button>
+  </div>
+  <div class="grp" id="exportCtrls" style="display:none;">
+    <button onclick="app.exportPNG()">⬇ PNG</button>
+    <button onclick="app.exportSVG()">⬇ SVG</button>
+    <button onclick="window.print()">🖨 Print</button>
+ </div>
+ <div class="grp" id="plotFileCtrls">
+    <button onclick="app.savePlot()" title="Save the loaded data, tracks, tops and settings to a file">💾 Save Plot</button>
+ </div>
+  <div class="grp">
+    <button onclick="document.getElementById('plotFileInput').click()" title="Reopen a previously saved plot file">📂 Open Plot</button>
+    <input type="file" id="plotFileInput" accept=".json,.lasplot.json">
+  </div>
+</header>
+
+<div class="main">
+  <div id="sidebar">
+    <h2 id="fileInfoHeader" class="acc-header">File Info <span class="caret">▾</span></h2>
+    <div id="fileInfoWrap" class="acc-wrap">
+      <div id="fileInfo">No file loaded.</div>
+    </div>
+
+    <h2 id="wellHeaderHeading" class="acc-header collapsed" style="display:none;">Well Header <span class="caret">▾</span></h2>
+    <div id="wellHeaderWrap" class="acc-wrap collapsed">
+      <div id="wellHeaderTable"></div>
+      <div style="font-size:10px; color:var(--muted); margin-top:6px;">This is included automatically on Print and on PNG/SVG export, whether or not this panel is open.</div>
+    </div>
+
+    <h2 id="curvesHeading" class="acc-header" style="display:none;">Curves (click to add to track) <span class="caret">▾</span></h2>
+    <div id="curveListWrap" class="acc-wrap">
+      <div id="curveList"></div>
+    </div>
+
+    <h2 id="trackEditorHeading" class="acc-header collapsed" style="display:none;">Track Editor <span class="caret">▾</span></h2>
+    <div id="trackEditorWrap" class="acc-wrap collapsed">
+      <div id="trackEditorList"></div>
+      <button class="small" style="width:100%; margin-top:4px;" onclick="app.addTrack(); renderCurveList(); render();">+ Track</button>
+    </div>
+
+    <h2 id="topsHeading" class="acc-header collapsed" style="display:none;">Sand Tops / Markers <span class="caret">▾</span></h2>
+    <div id="topsWrap" class="acc-wrap collapsed">
+      <div style="font-size:10px; color:var(--muted); margin-bottom:6px;">Add a depth marker with a short description — it's drawn as a line across the tracks you choose (or all of them), so it shows over the curves.</div>
+      <div id="topsList"></div>
+      <button class="small" style="width:100%; margin-top:4px;" onclick="app.addTop(); render();">+ Add Top</button>
+    </div>
+
+    <h2 id="feHeading" class="acc-header collapsed" style="display:none;">Formation Evaluation <span class="caret">▾</span></h2>
+    <div id="feWrap" class="acc-wrap collapsed">
+      <div class="fe-sub">Input Curves</div>
+      <div class="fe-row"><label>Gamma Ray</label><select id="feGR"></select></div>
+      <div class="fe-row"><label>Bulk Density</label><select id="feRHOB"></select></div>
+      <div class="fe-row"><label>Neutron Poro.</label><select id="feNPHI"></select></div>
+      <div class="fe-row"><label>Resistivity</label><select id="feRT"></select></div>
+      <div class="fe-row"><label>SP</label><select id="feSP"></select></div>
+
+      <div class="fe-sub">Vshale (GR)</div>
+      <div class="fe-row"><label>Method</label>
+        <select id="feVshMethod">
+          <option value="linear">Linear</option>
+          <option value="larionovT">Larionov (tertiary)</option>
+          <option value="larionovO">Larionov (older)</option>
+        </select>
+      </div>
+      <div class="fe-row"><label>GR clean</label><input type="number" id="feGRclean" step="any"></div>
+      <div class="fe-row"><label>GR shale</label><input type="number" id="feGRshale" step="any"></div>
+
+      <div class="fe-sub">Porosity</div>
+      <div class="fe-row"><label>Matrix ρma</label><input type="number" id="feRhoma" step="any" value="2.65"></div>
+      <div class="fe-row"><label>Fluid ρfl</label><input type="number" id="feRhofl" step="any" value="1.0"></div>
+
+      <div class="fe-sub">Water Saturation (Archie)</div>
+      <div class="fe-row"><label>Rw (ohm·m)</label><input type="number" id="feRw" step="any" value="0.03"></div>
+      <div class="fe-row"><label>a</label><input type="number" id="feA" step="any" value="1"></div>
+      <div class="fe-row"><label>m</label><input type="number" id="feM" step="any" value="2"></div>
+      <div class="fe-row"><label>n</label><input type="number" id="feN" step="any" value="2"></div>
+
+      <div style="border:1px dashed var(--border); border-radius:6px; padding:6px; margin:4px 0 8px;">
+        <div style="font-size:10px; color:var(--muted); margin-bottom:5px;">
+          Estimate Rw from a clean, water-bearing ("wet") interval — reads average resistivity
+          &amp; porosity there and back-solves Archie for Rw (assumes Sw=100%). SP is shown to help
+          confirm the interval is a clean, permeable sand.
+        </div>
+        <div class="fe-row"><label>Wet zone from</label><input type="number" id="feWetFrom" step="any"></div>
+        <div class="fe-row"><label>Wet zone to</label><input type="number" id="feWetTo" step="any"></div>
+        <button class="small" style="width:100%;" onclick="app.estimateRwFromZone()">↻ Estimate Rw from zone</button>
+        <div id="feRwResult" style="font-size:10px; color:var(--muted); margin-top:5px;"></div>
+      </div>
+
+      <div class="fe-sub">Pay Cutoffs</div>
+      <div class="fe-row"><label>Vsh ≤</label><input type="number" id="feVshCut" step="any" value="0.5"></div>
+      <div class="fe-row"><label>PHIE ≥</label><input type="number" id="fePhieCut" step="any" value="0.08"></div>
+      <div class="fe-row"><label>Sw ≤</label><input type="number" id="feSwCut" step="any" value="0.6"></div>
+
+      <button id="feCompute" class="primary" onclick="app.computeFormationEval()">▶ Compute VSH · PHIE · SW · PAY</button>
+
+      <div id="feResults"></div>
+      <div id="feNote">Quick-look estimate using standard textbook equations (linear/Larionov Vsh,
+      density±neutron porosity, Archie Sw). Intended for screening only — not a substitute for a
+      calibrated petrophysical evaluation.</div>
+    </div>
+  </div>
+
+  <div class="viewer" id="viewer">
+    <div id="printHeader"></div>
+    <div id="welcome">
+      <h2>No log loaded</h2>
+      <p>Open a standard LAS 2.0 / 3.0 file, or click <b>Demo Data</b> to try the viewer immediately —
+      the demo includes GR, resistivity, density-neutron, sonic, caliper, SP and a synthetic
+      <b>Casing Collar Log (CCL)</b> curve with collar spikes.<br><br>
+      Everything runs locally in this page — no data ever leaves your browser, and this file works
+      fully offline once saved to disk.</p>
+    </div>
+    <div id="trackHeaderWrap" style="display:none;">
+      <div class="depthColHeader" id="depthColHeader"></div>
+    </div>
+    <div id="trackBodyWrap" style="display:none;">
+      <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="hoverCrosshair"></div>
+    </div>
+  </div>
+  <div id="hoverTooltip"></div>
+</div>
+
+<div id="status">Ready.</div>
+
+<script>
+/* ============================= LAS PARSER ============================= */
+function parseLAS(text){
+  text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines = text.split('\n');
+  const sections = {}; // key: section letter -> {raw:[], name}
+  let current = null;
+  for(let raw of lines){
+    const line = raw;
+    const trimmed = line.trim();
+    if(trimmed === '' || trimmed.startsWith('#')) continue;
+    if(trimmed.startsWith('~')){
+      const letter = trimmed[1] ? trimmed[1].toUpperCase() : '?';
+      current = letter;
+      if(!sections[current]) sections[current] = [];
+      continue;
+    }
+    if(current){ sections[current].push(line); }
+  }
+
+  function parseLineItems(rows){
+    // MNEM.UNIT  VALUE : DESCRIPTION
+    const items = [];
+    for(let row of rows){
+      const m = row.match(/^\s*([^.\s]+)\s*\.(\S*)\s+([^:]*?)\s*(?::(.*))?$/);
+      if(!m) continue;
+      items.push({
+        mnem: m[1].trim(),
+        unit: (m[2]||'').trim(),
+        value: (m[3]||'').trim(),
+        desc: (m[4]||'').trim()
+      });
+    }
+    return items;
+  }
+
+  const version = parseLineItems(sections['V']||[]);
+  const well    = parseLineItems(sections['W']||[]);
+  const curveDefs = parseLineItems(sections['C']||[]);
+  const params  = parseLineItems(sections['P']||[]);
+
+  let wrap = 'NO';
+  const wrapItem = version.find(i=>i.mnem.toUpperCase()==='WRAP');
+  if(wrapItem) wrap = wrapItem.value.toUpperCase();
+
+  let nullVal = -999.25;
+  const nullItem = well.find(i=>i.mnem.toUpperCase()==='NULL');
+  if(nullItem && !isNaN(parseFloat(nullItem.value))) nullVal = parseFloat(nullItem.value);
+
+  const curves = curveDefs.map((c,i)=>({
+    mnemonic: c.mnem, unit: c.unit, desc: c.desc, index: i
+  }));
+  if(curves.length === 0){
+    throw new Error('No ~CURVE section found — not a valid LAS file.');
+  }
+
+  const asciiRows = sections['A'] || [];
+  const nCurves = curves.length;
+  const data = []; // array of rows, each row = array of numbers (or null)
+
+  if(wrap === 'YES'){
+    // values for one depth may span multiple lines; keep reading tokens until we have nCurves values
+    let buffer = [];
+    for(let row of asciiRows){
+      const toks = row.trim().split(/\s+/).filter(Boolean);
+      for(let t of toks){
+        buffer.push(t);
+        if(buffer.length === nCurves){
+          data.push(buffer.map(v=>{
+            const f = parseFloat(v);
+            return isNaN(f) || Math.abs(f-nullVal) < 1e-6 ? null : f;
+          }));
+          buffer = [];
+        }
+      }
+    }
+  } else {
+    for(let row of asciiRows){
+      const toks = row.trim().split(/[\s,]+/).filter(Boolean);
+      if(toks.length < nCurves) continue;
+      const vals = toks.slice(0,nCurves).map(v=>{
+        const f = parseFloat(v);
+        return isNaN(f) || Math.abs(f-nullVal) < 1e-6 ? null : f;
+      });
+      data.push(vals);
+    }
+  }
+
+  return {version, well, curves, params, nullVal, wrap, data};
+}
+
+/* ===================== CURVE TYPE RECOGNITION ===================== */
+const CURVE_TYPES = [
+  {test:/^(GR|SGR|CGR|GAMM)/i,               type:'GR',    color:'#1a8f3c', scale:'linear', min:0,    max:150,  track:'gr'},
+  {test:/^SP$/i,                              type:'SP',    color:'#1560bd', scale:'linear', min:-160, max:40,   track:'gr'},
+  {test:/^(CALI|CAL)($|[_0-9])/i,             type:'CALI',  color:'#a5720a', scale:'linear', min:6,    max:16,   track:'gr'},
+  {test:/^(CCL|COLLAR)/i,                     type:'CCL',   color:'#111318', scale:'linear', min:-100, max:100,  track:'ccl'},
+  {test:/^(ILD|LLD|RT|RD|AT90|RESD|LL7|RILD|LN)/i,type:'RESD', color:'#c0392b', scale:'log',    min:0.2,  max:2000, track:'res'},
+  {test:/^(ILM|LLS|AT30|AT20|RESM|RILM)/i,    type:'RESM',  color:'#7d3c98', scale:'log',    min:0.2,  max:2000, track:'res'},
+  {test:/^(SFL|MSFL|RXO|AT10|SFLU|SN)/i,      type:'RESS',  color:'#c8710a', scale:'log',    min:0.2,  max:2000, track:'res'},
+  {test:/^(RHOB|DEN|ZDEN|RHOZ)/i,             type:'RHOB',  color:'#c0392b', scale:'linear', min:1.95, max:2.95, track:'den'},
+  {test:/^(NPHI|TNPH|NPOR|CNC)/i,             type:'NPHI',  color:'#1560bd', scale:'linear', min:0.45, max:-0.15,track:'den'},
+  {test:/^(PEF|PE)$/i,                        type:'PEF',   color:'#a5720a', scale:'linear', min:0,    max:10,   track:'den'},
+  {test:/^(DT|DTC|SONIC|AC)($|[_0-9])/i,      type:'DT',    color:'#9b2fae', scale:'linear', min:140,  max:40,   track:'dt'},
+  {test:/^(DEPT|DEPTH|MD)$/i,                 type:'DEPTH', color:'#555',    scale:'linear', min:0,    max:0,    track:null},
+  {test:/^VSH/i,                              type:'VSH',   color:'#8a5a2b', scale:'linear', min:0,    max:1,    track:'vsh'},
+  {test:/^(PHIE|PHIT)$/i,                     type:'PHIE',  color:'#0e8f5c', scale:'linear', min:0.4,  max:0,    track:'vsh'},
+  {test:/^SW$/i,                              type:'SW',    color:'#1560bd', scale:'linear', min:0,    max:1,    track:'sw'},
+  {test:/^(PAY_?FLAG|NETPAY|PAY)$/i,          type:'PAY',   color:'#d99a1b', scale:'linear', min:0,    max:1,    track:'pay'},
+];
+function classify(mnemonic){
+  for(const t of CURVE_TYPES){ if(t.test.test(mnemonic)) return t; }
+  return {type:'OTHER', color:randColor(mnemonic), scale:'linear', min:null, max:null, track:'other'};
+}
+function randColor(seed){
+  let h=0; for(let i=0;i<seed.length;i++) h = (h*31 + seed.charCodeAt(i))>>>0;
+  const hue = h % 360;
+  return `hsl(${hue} 65% 38%)`;
+}
+
+/* ============================== APP STATE ============================== */
+const app = {
+  las: null,
+  depthCurveIdx: 0,
+  depthUnit: '',
+  tracks: [],       // {id, type, curves:[{curveIndex, color, min, max, scale, width}]}
+  nextTrackId: 1,
+  fromDepth: 0, toDepth: 0,
+  pxPerUnit: 5,
+  trackWidth: 150,
+  feComputed: false,
+  depthInsertIndex: 0,   // 0 = left of all tracks; N = right of all tracks; i = between track i-1 and i
+  depthGridInterval: 50,
+  depthColWidth: 40,
+  tops: [],           // {id, label, depth, color, trackIds:[]}  trackIds=[] means "all tracks"
+  nextTopId: 1,
+
+    reset(){
+    this.tracks = []; this.nextTrackId = 1;
+  },
+
+  savePlot(){
+    if(!this.las){
+      alert('Load a LAS file first before saving.');
+      return;
+    }
+    
+    // Collect all the data needed to recreate the plot
+    const plotData = {
+      version: '1.0',
+      filename: this.currentFilename || 'untitled',
+      // LAS data
+      las: {
+        version: this.las.version,
+        well: this.las.well,
+        curves: this.las.curves,
+        params: this.las.params,
+        nullVal: this.las.nullVal,
+        wrap: this.las.wrap,
+        data: this.las.data
+      },
+      // Track settings
+      tracks: this.tracks.map(t => ({
+        id: t.id,
+        width: t.width,
+        gridMajor: t.gridMajor || null,
+        gridMinor: t.gridMinor || 0,
+        fillCurves: t.fillCurves || false,
+        fillColor: t.fillColor || '#e0c04c',
+        fillDirection: t.fillDirection || 'lt',
+        curves: t.curves.map(c => ({
+          curveIndex: c.curveIndex,
+          color: c.color,
+          min: c.min,
+          max: c.max,
+          scale: c.scale,
+          width: c.width,
+          style: c.style || 'solid',
+          label: c.label,
+          unit: c.unit,
+          isFlag: c.isFlag || false,
+          isCCL: c.isCCL || false
+        }))
+      })),
+      // View settings
+      view: {
+        fromDepth: this.fromDepth,
+        toDepth: this.toDepth,
+        pxPerUnit: this.pxPerUnit,
+        depthColWidth: this.depthColWidth,
+        depthInsertIndex: this.depthInsertIndex,
+        depthGridInterval: this.depthGridInterval,
+        depthUnit: this.depthUnit,
+        depthCurveIdx: this.depthCurveIdx
+      },
+      // Tops/markers
+      tops: this.tops.map(t => ({
+  	id: t.id,
+  	label: t.label,
+  	depth: t.depth,
+  	color: t.color,
+  	trackIds: t.trackIds || [],
+ 	labelFormat: t.labelFormat || 'default',
+  	lineType: t.lineType || 'dashed'
+       })),
+      nextTrackId: this.nextTrackId,
+      nextTopId: this.nextTopId,
+      trackWidth: this.trackWidth,
+      feComputed: this.feComputed || false
+    };
+
+    // Convert to JSON string with nice formatting
+    const jsonString = JSON.stringify(plotData, null, 2);
+    
+    // Create a Blob
+    const blob = new Blob([jsonString], {type: 'application/json'});
+    
+    // Create download link and trigger download
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
+    link.download = `${name}.lasplot.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
+    
+    setStatus(`Plot saved as ${link.download}`);
+  },
+
+  addTrack(typeKey){
+    const id = this.nextTrackId++;
+    this.tracks.push({id, curves:[], width: this.trackWidth});
+    return id;
+  },
+  openPlot(file){
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const plotData = JSON.parse(ev.target.result);
+        
+        // Validate the plot data
+        if (!plotData.las || !plotData.tracks || !plotData.view) {
+          throw new Error('Invalid plot file format');
+        }
+        
+        // Restore the LAS data
+        this.las = plotData.las;
+        this.currentFilename = plotData.filename || 'restored_plot';
+        
+        // Restore tracks
+        this.tracks = plotData.tracks.map(t => ({
+          ...t,
+          curves: t.curves.map(c => ({...c}))
+        }));
+        this.nextTrackId = plotData.nextTrackId || this.tracks.length + 1;
+        
+        // Restore view settings
+        this.fromDepth = plotData.view.fromDepth;
+        this.toDepth = plotData.view.toDepth;
+        this.pxPerUnit = plotData.view.pxPerUnit;
+        this.depthColWidth = plotData.view.depthColWidth || 40;
+        this.depthInsertIndex = plotData.view.depthInsertIndex || 0;
+        this.depthGridInterval = plotData.view.depthGridInterval || null;
+        this.depthUnit = plotData.view.depthUnit || '';
+        this.depthCurveIdx = plotData.view.depthCurveIdx || 0;
+        
+        // Restore tops
+        this.tops = plotData.tops.map(t => ({ ...t,
+  	     labelFormat: t.labelFormat || 'default',
+  	  lineType: t.lineType || 'dashed'
+	})) || [];
+        
+        // Update UI
+        document.getElementById('welcome').style.display = 'none';
+        document.getElementById('trackHeaderWrap').style.display = 'flex';
+        document.getElementById('trackBodyWrap').style.display = 'block';
+        document.getElementById('depthCtrls').style.display = 'flex';
+        document.getElementById('zoomCtrls').style.display = 'flex';
+        document.getElementById('exportCtrls').style.display = 'flex';
+        document.getElementById('trackPanelCtrl').style.display = 'flex';
+        document.getElementById('curvesHeading').style.display = 'flex';
+        document.getElementById('feHeading').style.display = 'flex';
+        document.getElementById('wellHeaderHeading').style.display = 'flex';
+        document.getElementById('trackEditorHeading').style.display = 'flex';
+        document.getElementById('topsHeading').style.display = 'flex';
+        document.getElementById('plotFileCtrls').style.display = 'flex';
+        
+        document.getElementById('depthFrom').value = round2(this.fromDepth);
+        document.getElementById('depthTo').value = round2(this.toDepth);
+        document.getElementById('pxPerUnit').value = round2(this.pxPerUnit);
+        document.getElementById('depthColWidthInput').value = this.depthColWidth;
+        
+        const wellName = (this.las.well.find(w => w.mnem.toUpperCase() === 'WELL') || {}).value || this.currentFilename;
+        document.getElementById('fileInfo').textContent =
+          `File: ${this.currentFilename}\nWell: ${wellName}\nCurves: ${this.las.curves.length}\nRows: ${this.las.data.length}\n` +
+          `Depth: ${round2(this.fromDepth)} – ${round2(this.toDepth)} ${this.depthUnit}\nWrap: ${this.las.wrap}`;
+        
+        renderCurveList();
+        populateFEForm();
+        buildPrintHeader(this.las, this.currentFilename);
+        renderWellHeaderPanel(this.las, this.currentFilename);
+        render();
+        setStatus(`Plot restored from ${this.currentFilename}`);
+        
+      } catch(err) {
+        alert('Failed to open plot file: ' + err.message);
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+  },
+  
+addTop(){
+  const id = this.nextTopId++;
+  const depth = this.las ? round2((this.fromDepth+this.toDepth)/2) : 0;
+  this.tops.push({
+    id, 
+    label: 'New Top', 
+    depth, 
+    color: '#c0392b', 
+    trackIds: [],
+    labelFormat: 'default', // 'default', 'bold', 'italic', 'underline'
+    lineType: 'dashed'     // 'solid', 'dashed', 'dotted', 'dashdot'
+  });
+  return id;
+},
+
+  addCurveToTrack(curveIndex, trackId){
+    const curve = this.las.curves[curveIndex];
+    const cls = classify(curve.mnemonic);
+    let track = this.tracks.find(t=>t.id===trackId);
+    if(!track){ this.addTrack(); track = this.tracks[this.tracks.length-1]; }
+    let min = cls.min, max = cls.max;
+    if(min===null || max===null){
+      const auto = this.autoRange(curveIndex);
+      min = auto.min; max = auto.max;
+    }
+    track.curves.push({
+      curveIndex, color: cls.color, min, max, scale: cls.scale || 'linear', width: 1.5, style: 'solid',
+      label: curve.mnemonic, unit: curve.unit, isCCL: cls.type==='CCL', isFlag: cls.type==='PAY'
+    });
+  },
+
+  autoRange(curveIndex){
+    let vals = [];
+    for(const row of this.las.data){ const v=row[curveIndex]; if(v!==null && isFinite(v)) vals.push(v); }
+    if(vals.length===0) return {min:0,max:1};
+    vals.sort((a,b)=>a-b);
+    const lo = vals[Math.floor(vals.length*0.02)];
+    const hi = vals[Math.ceil(vals.length*0.98)-1];
+    if(lo===hi) return {min:lo-1, max:hi+1};
+    return {min:lo, max:hi};
+  },
+
+  buildDefaultLayout(){
+    this.reset();
+    const groups = {}; // trackKey -> trackId
+    const order = ['gr','res','den','dt','ccl','other'];
+    for(const key of order) groups[key] = null;
+
+    this.las.curves.forEach((c, idx)=>{
+      const cls = classify(c.mnemonic);
+      if(cls.type==='DEPTH') return;
+      const key = cls.track || 'other';
+      if(groups[key]===null){
+        groups[key] = this.addTrack(key);
+        const t = this.tracks.find(tr=>tr.id===groups[key]);
+        // Track 1 (gr/sp/cali): default width. Track 2 (resistivity): linear
+        // scale, 200px, 5 major gridlines. Track 3 (density/neutron): 170px,
+        // 8 major gridlines, gas-crossover fill.
+        if(key==='res'){ t.width=200; t.gridMajor=5; t.gridMinor=0; }
+        if(key==='den'){ t.width=170; t.gridMajor=8; t.gridMinor=0; t.fillCurves=true; t.fillColor='#e0c04c'; t.fillDirection='lt'; }
+      }
+      this.addCurveToTrack(idx, groups[key]);
+      if(key==='res'){
+        // resistivity defaults to log scale via CURVE_TYPES; this layout calls
+        // for linear instead, auto-ranged to the curve's actual data spread
+        // rather than the log-oriented 0.2–2000 default
+        const cv = this.tracks.find(tr=>tr.id===groups[key]).curves.slice(-1)[0];
+        cv.scale = 'linear';
+        const auto = this.autoRange(idx);
+        cv.min = Math.max(0, Math.floor(auto.min));
+        cv.max = Math.ceil(auto.max);
+      }
+    });
+
+    if(this.tracks.length===0) this.addTrack();
+  },
+
+  resetDepthRange(){
+    const dIdx = this.depthCurveIdx;
+    let vals = this.las.data.map(r=>r[dIdx]).filter(v=>v!==null);
+    this.fromDepth = arrMin(vals);
+    this.toDepth = arrMax(vals);
+    document.getElementById('depthFrom').value = round2(this.fromDepth);
+    document.getElementById('depthTo').value = round2(this.toDepth);
+    render();
+  },
+
+  zoom(factor){
+    this.pxPerUnit = Math.max(0.2, Math.min(500, this.pxPerUnit*factor));
+    document.getElementById('pxPerUnit').value = round2(this.pxPerUnit);
+    render();
+  },
+
+  exportSVG(){
+    if(!this.las){ alert('Load a LAS file first.'); return; }
+    const {combined} = this.buildCombinedExportSVG();
+    const src = '<?xml version="1.0" standalone="no"?>\n' + combined;
+    const blob = new Blob([src], {type:'image/svg+xml'});
+    downloadBlob(blob, 'log_export.svg');
+  },
+
+  exportPNG(){
+    if(!this.las){ alert('Load a LAS file first.'); return; }
+    const {combined, w, totalH} = this.buildCombinedExportSVG();
+    const svgBlob = new Blob([combined], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = function(){
+      const canvas = document.createElement('canvas');
+      const scale = 2;
+      canvas.width = w*scale; canvas.height = totalH*scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.scale(scale,scale);
+      ctx.drawImage(img,0,0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob=>downloadBlob(blob, 'log_export.png'));
+    };
+    img.src = url;
+  },
+
+  // Combines the live log SVG with a rendered well-header block into one
+  // self-contained SVG string, so the header is included in both PNG and
+  // SVG export regardless of whether the sidebar panel is currently open —
+  // matching what Print already shows.
+
+  buildCombinedExportSVG(){
+    const svg = document.getElementById('svgCanvas');
+    const w = svg.viewBox.baseVal.width || svg.clientWidth;
+    const h = svg.viewBox.baseVal.height || svg.clientHeight;
+    const info = getWellHeaderInfo(this.las, this.currentFilename||'log');
+    const rowLines = Math.max(1, Math.ceil(info.rows.length/3));
+    const headerH = 40 + rowLines*16 + 10;
+    const totalH = headerH + h;
+    const serializer = new XMLSerializer();
+    let innerSrc = serializer.serializeToString(svg);
+    innerSrc = innerSrc.replace('<svg', `<svg x="0" y="${headerH}"`);
+    const headerMarkup = buildHeaderSVGMarkup(w, headerH, info);
+    const combined = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${totalH}" viewBox="0 0 ${w} ${totalH}">`+
+      `<rect x="0" y="0" width="${w}" height="${totalH}" fill="#ffffff"/>`+
+      headerMarkup + innerSrc + `</svg>`;
+    return {combined, w, totalH};
+  },
+
+  getWellParam(mnem){
+    const item = (this.las.well||[]).find(w=>w.mnem.toUpperCase()===mnem.toUpperCase());
+    if(!item) return null;
+    const f = parseFloat(item.value);
+    return isNaN(f) ? null : f;
+  },
+
+  depthStep(){
+    let step = this.getWellParam('STEP');
+    if(step!==null && step!==0) return Math.abs(step);
+    // fall back: median spacing between consecutive depth samples
+    const dIdx = this.depthCurveIdx;
+    const diffs = [];
+    for(let i=1;i<Math.min(this.las.data.length,2000);i++){
+      const a = this.las.data[i-1][dIdx], b = this.las.data[i][dIdx];
+      if(a!==null && b!==null) diffs.push(Math.abs(b-a));
+    }
+    if(diffs.length===0) return 1;
+    diffs.sort((a,b)=>a-b);
+    return diffs[Math.floor(diffs.length/2)] || 1;
+  },
+
+  // find or append a curve, returning its index. If it already exists, its
+  // values are overwritten in place so re-computing with new parameters
+  // updates the existing curve rather than duplicating it.
+  upsertCurve(mnemonic, unit, desc, values){
+    let idx = this.las.curves.findIndex(c=>c.mnemonic.toUpperCase()===mnemonic.toUpperCase());
+    if(idx===-1){
+      idx = this.las.curves.length;
+      this.las.curves.push({mnemonic, unit, desc, index: idx});
+      for(let r=0;r<this.las.data.length;r++){ this.las.data[r][idx] = values[r]; }
+    } else {
+      for(let r=0;r<this.las.data.length;r++){ this.las.data[r][idx] = values[r]; }
+    }
+    return idx;
+  },
+
+  estimateRwFromZone(){
+    if(!this.las){ alert('Load a LAS file first.'); return; }
+    const rhobIdx = document.getElementById('feRHOB').value;
+    const nphiIdx = document.getElementById('feNPHI').value;
+    const rtIdx = document.getElementById('feRT').value;
+    const spIdx = document.getElementById('feSP').value;
+    if(rtIdx===''){ alert('Select a resistivity curve first.'); return; }
+    if(rhobIdx==='' && nphiIdx===''){ alert('Select a density and/or neutron curve first (needed for porosity).'); return; }
+
+    const rhoma = parseFloat(document.getElementById('feRhoma').value);
+    const rhofl = parseFloat(document.getElementById('feRhofl').value);
+    const a = parseFloat(document.getElementById('feA').value);
+    const m = parseFloat(document.getElementById('feM').value);
+    const wetFrom = Math.min(parseFloat(document.getElementById('feWetFrom').value), parseFloat(document.getElementById('feWetTo').value));
+    const wetTo = Math.max(parseFloat(document.getElementById('feWetFrom').value), parseFloat(document.getElementById('feWetTo').value));
+    const dIdx = this.depthCurveIdx;
+
+    const rwSamples = [];
+    let spSum=0, spN=0;
+    for(const row of this.las.data){
+      const d = row[dIdx];
+      if(d===null || d<wetFrom || d>wetTo) continue;
+      const rt = row[rtIdx];
+      let phi = null;
+      if(rhobIdx!==''){
+        const rhob = row[rhobIdx];
+        if(rhob!==null && isFinite(rhob) && rhoma!==rhofl){
+          const phid = (rhoma-rhob)/(rhoma-rhofl);
+          if(nphiIdx!==''){
+            const nphi = row[nphiIdx];
+            phi = (nphi!==null && isFinite(nphi)) ? (phid+nphi)/2 : phid;
+          } else phi = phid;
+        }
+      } else if(nphiIdx!==''){
+        const nphi = row[nphiIdx];
+        if(nphi!==null && isFinite(nphi)) phi = nphi;
+      }
+      if(phi!==null) phi = Math.max(0.001, Math.min(0.45, phi));
+      if(rt!==null && isFinite(rt) && rt>0 && phi!==null){
+        rwSamples.push(rt*Math.pow(phi,m)/a);
+      }
+      if(spIdx!==''){
+        const sp = row[spIdx];
+        if(sp!==null && isFinite(sp)){ spSum+=sp; spN++; }
+      }
+    }
+
+    const box = document.getElementById('feRwResult');
+    if(rwSamples.length===0){
+      box.textContent = 'No valid samples in that depth range — check curve selections and depths.';
+      return;
+    }
+    rwSamples.sort((x,y)=>x-y);
+    const median = rwSamples[Math.floor(rwSamples.length/2)];
+    const mean = rwSamples.reduce((s,v)=>s+v,0)/rwSamples.length;
+    document.getElementById('feRw').value = round3(median);
+    const spTxt = spN>0 ? `, avg SP = ${round2(spSum/spN)} mV` : '';
+    box.textContent = `Rw ≈ ${round3(median)} ohm·m (median of ${rwSamples.length} samples, mean ${round3(mean)}${spTxt}). Field applied above — press Compute to update SW.`;
+  },
+
+  computeFormationEval(){
+    if(!this.las){ alert('Load a LAS file first.'); return; }
+    const grIdx = document.getElementById('feGR').value;
+    const rhobIdx = document.getElementById('feRHOB').value;
+    const nphiIdx = document.getElementById('feNPHI').value;
+    const rtIdx = document.getElementById('feRT').value;
+    if(grIdx===''){ alert('Select a Gamma Ray curve — Vshale needs it.'); return; }
+
+    const grClean = parseFloat(document.getElementById('feGRclean').value);
+    const grShale = parseFloat(document.getElementById('feGRshale').value);
+    const vshMethod = document.getElementById('feVshMethod').value;
+    const rhoma = parseFloat(document.getElementById('feRhoma').value);
+    const rhofl = parseFloat(document.getElementById('feRhofl').value);
+    const rw = parseFloat(document.getElementById('feRw').value);
+    const a = parseFloat(document.getElementById('feA').value);
+    const m = parseFloat(document.getElementById('feM').value);
+    const n = parseFloat(document.getElementById('feN').value);
+    const vshCut = parseFloat(document.getElementById('feVshCut').value);
+    const phieCut = parseFloat(document.getElementById('fePhieCut').value);
+    const swCut = parseFloat(document.getElementById('feSwCut').value);
+
+    const N = this.las.data.length;
+    const vsh = new Array(N).fill(null);
+    const phie = new Array(N).fill(null);
+    const sw = new Array(N).fill(null);
+    const pay = new Array(N).fill(null);
+
+    for(let r=0;r<N;r++){
+      const row = this.las.data[r];
+      const gr = row[grIdx];
+      let v = null;
+      if(gr!==null && isFinite(gr) && grShale!==grClean){
+        let igr = (gr-grClean)/(grShale-grClean);
+        igr = Math.max(0, Math.min(1, igr));
+        if(vshMethod==='larionovT') v = 0.083*(Math.pow(2, 3.7*igr)-1);
+        else if(vshMethod==='larionovO') v = 0.33*(Math.pow(2, 2*igr)-1);
+        else v = igr;
+        v = Math.max(0, Math.min(1, v));
+      }
+      vsh[r] = v;
+
+      let phi = null;
+      if(rhobIdx!=='' ){
+        const rhob = row[rhobIdx];
+        if(rhob!==null && isFinite(rhob) && rhoma!==rhofl){
+          let phid = (rhoma-rhob)/(rhoma-rhofl);
+          let phit = phid;
+          if(nphiIdx!==''){
+            const nphi = row[nphiIdx];
+            if(nphi!==null && isFinite(nphi)) phit = (phid+nphi)/2;
+          }
+          phi = v!==null ? phit*(1-v) : phit;
+          phi = Math.max(0, Math.min(0.45, phi));
+        }
+      } else if(nphiIdx!==''){
+        const nphi = row[nphiIdx];
+        if(nphi!==null && isFinite(nphi)){
+          phi = v!==null ? nphi*(1-v) : nphi;
+          phi = Math.max(0, Math.min(0.45, phi));
+        }
+      }
+      phie[r] = phi;
+
+      let swv = null;
+      if(phi!==null && phi>0.001 && rtIdx!==''){
+        const rt = row[rtIdx];
+        if(rt!==null && isFinite(rt) && rt>0){
+          swv = Math.pow((a*rw)/(Math.pow(phi,m)*rt), 1/n);
+          swv = Math.max(0, Math.min(1, swv));
+        }
+      }
+      sw[r] = swv;
+
+      if(v!==null && phi!==null){
+        const isSand = v<=vshCut;
+        const isRes = isSand && phi>=phieCut;
+        const isPay = isRes && (swv===null || swv<=swCut);
+        pay[r] = isPay ? 1 : 0;
+      }
+    }
+
+    this.upsertCurve('VSH', 'V/V', 'Shale Volume (computed)', vsh);
+    this.upsertCurve('PHIE', 'V/V', 'Effective Porosity (computed)', phie);
+    const rtSelected = rtIdx!=='';
+    if(rtSelected) this.upsertCurve('SW', 'V/V', 'Water Saturation — Archie (computed)', sw);
+    this.upsertCurve('PAY_ZONE', 'FLAG', 'Net Pay Flag (computed)', pay);
+
+    renderCurveList();
+
+    if(!this.feComputed){
+      // first run: auto-build a set of tracks for the new curves so the
+      // result is visible immediately, without disturbing existing tracks
+      const vshIdx = this.las.curves.findIndex(c=>c.mnemonic==='VSH');
+      const phieIdx = this.las.curves.findIndex(c=>c.mnemonic==='PHIE');
+      const t1 = this.addTrack();
+      this.addCurveToTrack(vshIdx, t1);
+      this.addCurveToTrack(phieIdx, t1);
+      if(rtSelected){
+        const swIdx = this.las.curves.findIndex(c=>c.mnemonic==='SW');
+        const t2 = this.addTrack();
+        this.addCurveToTrack(swIdx, t2);
+      }
+      const payIdx = this.las.curves.findIndex(c=>c.mnemonic==='PAY_ZONE');
+      const t3 = this.addTrack();
+      this.addCurveToTrack(payIdx, t3);
+      this.feComputed = true;
+    }
+
+    this.summarizeZone();
+    render();
+    setStatus('Formation evaluation computed: VSH, PHIE' + (rtSelected?', SW':'') + ', PAY_ZONE.');
+  },
+
+  summarizeZone(){
+    const vshIdx = this.las.curves.findIndex(c=>c.mnemonic==='VSH');
+    const phieIdx = this.las.curves.findIndex(c=>c.mnemonic==='PHIE');
+    const swIdx = this.las.curves.findIndex(c=>c.mnemonic==='SW');
+    const payIdx = this.las.curves.findIndex(c=>c.mnemonic==='PAY_ZONE');
+    if(vshIdx===-1 || payIdx===-1) return;
+    const dIdx = this.depthCurveIdx;
+    const step = this.depthStep();
+    const from = Math.min(this.fromDepth, this.toDepth);
+    const to = Math.max(this.fromDepth, this.toDepth);
+
+    let sandCount=0, resCount=0, payCount=0, total=0;
+    let phieSum=0, phieN=0, swSum=0, swN=0;
+    const vshCut = parseFloat(document.getElementById('feVshCut').value);
+    const phieCut = parseFloat(document.getElementById('fePhieCut').value);
+
+    for(const row of this.las.data){
+      const d = row[dIdx];
+      if(d===null || d<from || d>to) continue;
+      total++;
+      const v = row[vshIdx], p = row[phieIdx], pf = row[payIdx];
+      const s = swIdx!==-1 ? row[swIdx] : null;
+      const isSand = v!==null && v<=vshCut;
+      if(isSand) sandCount++;
+      if(pf===1){ payCount++; }
+      if(isSand && p!==null && p>=phieCut) resCount++;
+      if(pf===1 && p!==null){ phieSum+=p; phieN++; }
+      if(pf===1 && s!==null){ swSum+=s; swN++; }
+    }
+
+    const box = document.getElementById('feResults');
+    box.style.display = total>0 ? 'block' : 'none';
+    if(total===0) return;
+    box.innerHTML =
+      `<div class="r"><span>Interval</span><b>${round2(from)}–${round2(to)} ${this.depthUnit}</b></div>` +
+      `<div class="r"><span>Net Sand</span><b>${round2(sandCount*step)} ${this.depthUnit}</b></div>` +
+      `<div class="r"><span>Net Reservoir</span><b>${round2(resCount*step)} ${this.depthUnit}</b></div>` +
+      `<div class="r"><span>Net Pay</span><b>${round2(payCount*step)} ${this.depthUnit}</b></div>` +
+      `<div class="r"><span>Avg PHIE (pay)</span><b>${phieN?round2(phieSum/phieN*100)+'%':'—'}</b></div>` +
+      `<div class="r"><span>Avg Sw (pay)</span><b>${swN?round2(swSum/swN*100)+'%':'—'}</b></div>`;
+  }
+};
+
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function round2(n){ return Math.round(n*100)/100; }
+function round3(n){ return Math.round(n*1000)/1000; }
+// Safe min/max over large arrays — avoids "Maximum call stack size exceeded"
+// which Math.min(...arr)/Math.max(...arr) throws once arr has ~65k+ elements.
+function arrMin(arr){ let m=Infinity; for(let i=0;i<arr.length;i++){ if(arr[i]<m) m=arr[i]; } return m; }
+function arrMax(arr){ let m=-Infinity; for(let i=0;i<arr.length;i++){ if(arr[i]>m) m=arr[i]; } return m; }
+// Resolves a CSS custom property to its literal computed color (e.g. "#dde1e8").
+// SVG elements exported/serialized for PNG/SVG download or print are detached
+// from this document's <style>, so a literal "var(--grid)" string embedded as
+// an attribute silently fails to resolve there (gridlines vanish on export/
+// print even though they look fine on screen). Resolving to a literal hex
+// value up front avoids that entirely.
+function getThemeColor(varName){
+  const v = getComputedStyle(document.documentElement).getPropertyValue(varName);
+  return (v && v.trim()) || '#888888';
+}
+
+/* =============================== LOADING =============================== */
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const las = parseLAS(ev.target.result);
+      initFromLAS(las, file.name);
+    }catch(err){
+      alert('Failed to parse LAS file: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+});
+
+function loadDemo(){
+  const las = generateDemoLAS();
+  initFromLAS(las, 'DEMO_WELL.las');
+}
+
+function generateDemoLAS(){
+  const curves = [
+    {mnemonic:'DEPT', unit:'M', desc:'Depth'},
+    {mnemonic:'GR',   unit:'GAPI', desc:'Gamma Ray'},
+    {mnemonic:'CALI', unit:'IN', desc:'Caliper'},
+    {mnemonic:'ILD',  unit:'OHMM', desc:'Deep Resistivity'},
+    {mnemonic:'SFL',  unit:'OHMM', desc:'Shallow Resistivity'},
+    {mnemonic:'RHOB', unit:'G/C3', desc:'Bulk Density'},
+    {mnemonic:'NPHI', unit:'V/V', desc:'Neutron Porosity'},
+    {mnemonic:'DT',   unit:'US/F', desc:'Sonic Transit Time'},
+    {mnemonic:'SP',   unit:'MV', desc:'Spontaneous Potential'},
+    {mnemonic:'CCL',  unit:'MV', desc:'Casing Collar Log'}
+  ].map((c,i)=>({...c, index:i}));
+
+  const data = [];
+  const start=1000, end=1300, step=0.1524; // 0.5ft-ish in m
+  for(let d=start; d<=end; d+=step){
+    const x = d;
+    const gr = 60 + 40*Math.sin(x/8) + 15*Math.sin(x/1.3) + rnd(6);
+    const cali = 8.5 + 0.3*Math.sin(x/5) + rnd(0.1);
+    const shale = (Math.sin(x/8)+1)/2;
+    const ild = Math.max(0.3, 200*(1-shale) * (1+0.6*Math.sin(x/3)) + rnd(5));
+    const sfl = Math.max(0.2, ild*0.6 + rnd(3));
+    const rhob = 2.65 - 0.35*shale + rnd(0.02);
+    const nphi = 0.05 + 0.28*shale + rnd(0.01);
+    const dt = 55 + 40*shale + rnd(2);
+    const sp = -80 + 60*shale + rnd(3);
+    // casing collars every ~12 m with sharp spike
+    const collarSpacing = 12.0;
+    const nearestOffset = Math.min((x-start) % collarSpacing, collarSpacing-((x-start)%collarSpacing));
+    let ccl = rnd(3);
+    if(nearestOffset < 0.15){
+      ccl += 80*(1-nearestOffset/0.15);
+    }
+    data.push([round3(d), round3(gr), round3(cali), round3(ild), round3(sfl), round3(rhob), round3(nphi), round3(dt), round3(sp), round3(ccl)]);
+  }
+  function rnd(a){ return (Math.random()-0.5)*2*a; }
+  function round3(n){ return Math.round(n*1000)/1000; }
+
+  return {
+    version:[{mnem:'VERS',value:'2.0'},{mnem:'WRAP',value:'NO'}],
+    well:[{mnem:'STRT',unit:'M',value:String(start)},{mnem:'STOP',unit:'M',value:String(end)},
+          {mnem:'STEP',unit:'M',value:String(step)},{mnem:'NULL',value:'-999.25'},
+          {mnem:'WELL',value:'DEMO-1'}],
+    curves, params:[], nullVal:-999.25, wrap:'NO', data
+  };
+}
+
+function initFromLAS(las, filename){
+  app.las = las;
+  app.currentFilename = filename;
+  app.feComputed = false;
+  app.depthInsertIndex = 0;
+  app.depthColWidth = 40;
+  app.tops = [];
+  app.nextTopId = 1;
+  const dIdx = las.curves.findIndex(c=>/^(DEPT|DEPTH|MD)$/i.test(c.mnemonic));
+  app.depthCurveIdx = dIdx>=0 ? dIdx : 0;
+  app.depthUnit = las.curves[app.depthCurveIdx].unit || '';
+
+  app.buildDefaultLayout();
+
+  const depths = las.data.map(r=>r[app.depthCurveIdx]).filter(v=>v!==null);
+  app.fromDepth = arrMin(depths);
+  app.toDepth = arrMax(depths);
+  app.pxPerUnit = 5;
+
+  document.getElementById('welcome').style.display='none';
+  document.getElementById('trackHeaderWrap').style.display='flex';
+  document.getElementById('trackBodyWrap').style.display='block';
+  document.getElementById('depthCtrls').style.display='flex';
+  document.getElementById('zoomCtrls').style.display='flex';
+  document.getElementById('exportCtrls').style.display='flex';
+  document.getElementById('trackPanelCtrl').style.display='flex';
+  document.getElementById('curvesHeading').style.display='flex';
+  document.getElementById('feHeading').style.display='flex';
+  document.getElementById('feResults').style.display='none';
+  document.getElementById('feResults').innerHTML='';
+  document.getElementById('wellHeaderHeading').style.display='flex';
+  document.getElementById('trackEditorHeading').style.display='flex';
+  document.getElementById('topsHeading').style.display='flex';
+  document.getElementById("plotFileCtrls").style.display = "flex";
+  document.getElementById('depthFrom').value = round2(app.fromDepth);
+  document.getElementById('depthTo').value = round2(app.toDepth);
+  document.getElementById('pxPerUnit').value = round2(app.pxPerUnit);
+  document.getElementById('depthColWidthInput').value = app.depthColWidth;
+
+  const wellName = (las.well.find(w=>w.mnem.toUpperCase()==='WELL')||{}).value || filename;
+  document.getElementById('fileInfo').textContent =
+    `File: ${filename}\nWell: ${wellName}\nCurves: ${las.curves.length}\nRows: ${las.data.length}\n` +
+    `Depth: ${round2(app.fromDepth)} – ${round2(app.toDepth)} ${app.depthUnit}\nWrap: ${las.wrap}`;
+
+  renderCurveList();
+  populateFEForm();
+  buildPrintHeader(las, filename);
+  renderWellHeaderPanel(las, filename);
+  render();
+  setStatus(`Loaded ${filename}: ${las.curves.length} curves, ${las.data.length} samples.`);
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Single source of truth for the well header block, used by the sidebar
+// panel, the print header, and PNG/SVG export — so all three always agree.
+function getWellHeaderInfo(las, filename){
+  const get = (mnem)=>{ const it = las.well.find(w=>w.mnem.toUpperCase()===mnem.toUpperCase()); return it ? it.value : ''; };
+  const wellName = get('WELL') || filename;
+  const depthUnit = las.curves[app.depthCurveIdx].unit || '';
+  const rows = [
+    ['Company', get('COMP')], ['Field', get('FLD')], ['Location', get('LOC')],
+    ['County', get('CNTY')], ['State', get('STAT') || get('STATE')], ['Country', get('CTRY')],
+    ['API', get('API')], ['UWI', get('UWI')], ['Service Co.', get('SRVC')],
+    ['Date', get('DATE')], ['Start Depth', get('STRT') ? get('STRT')+' '+depthUnit : ''],
+    ['Stop Depth', get('STOP') ? get('STOP')+' '+depthUnit : ''],
+  ].filter(([k,v])=>v && String(v).trim()!=='');
+  // always-available fallback fields, so the header is never empty even for a bare-bones LAS file
+  if(rows.length===0){
+    rows.push(['Curves', String(las.curves.length)]);
+    rows.push(['Samples', String(las.data.length)]);
+    rows.push(['Depth range', round2(app.fromDepth)+' – '+round2(app.toDepth)+' '+depthUnit]);
+  }
+  return {title: wellName, rows};
+}
+
+function escapeXml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Renders the well header as raw SVG markup (rect + text), for PNG/SVG export.
+function buildHeaderSVGMarkup(w, headerH, info){
+  let s = `<rect x="0" y="0" width="${w}" height="${headerH}" fill="#eef3fa" stroke="#7891b3" stroke-width="1"/>`;
+  s += `<text x="10" y="20" font-size="15" font-weight="700" fill="#1b1e24" font-family="Arial, sans-serif">${escapeXml(info.title)}</text>`;
+  const colW = w/3;
+  info.rows.forEach((r,i)=>{
+    const col = i%3, rowIdx = Math.floor(i/3);
+    const x = 10 + col*colW;
+    const y = 40 + rowIdx*16;
+    if(y < headerH-4){
+      s += `<text x="${x}" y="${y}" font-size="10" fill="#333" font-family="Arial, sans-serif"><tspan font-weight="700">${escapeXml(r[0])}:</tspan> ${escapeXml(String(r[1]))}</text>`;
+    }
+  });
+  return s;
+}
+
+function rowsToHtmlTable(rows){
+  let html = '<table><tbody>';
+  for(let i=0;i<rows.length;i+=3){
+    html += '<tr>';
+    for(let j=i;j<i+3;j++){
+      html += j<rows.length ? `<td><b>${escapeHtml(rows[j][0])}:</b> ${escapeHtml(String(rows[j][1]))}</td>` : '<td></td>';
+    }
+    html += '</tr>';
+  }
+  return html+'</tbody></table>';
+}
+
+function buildPrintHeader(las, filename){
+  const info = getWellHeaderInfo(las, filename);
+  document.getElementById('printHeader').innerHTML =
+    `<div class="wellTitle">${escapeHtml(info.title)}</div>` + (info.rows.length ? rowsToHtmlTable(info.rows) : '');
+}
+
+// Keeps the (print/export-only) well header the exact same pixel width as the
+// log tracks below it, so on a printed page they visually line up as one
+// block instead of the header spanning the full page width while the tracks
+// stay narrower (or vice versa).
+function syncPrintHeaderWidth(){
+  if(!app.las) return;
+  const { totalW } = computeColumns();
+  const printHeader = document.getElementById('printHeader');
+  
+  // Set the width to match the tracks
+  printHeader.style.width = totalW + 'px';
+  printHeader.style.maxWidth = totalW + 'px';
+ }
+
+function renderWellHeaderPanel(las, filename){
+  const info = getWellHeaderInfo(las, filename);
+  document.getElementById('wellHeaderTable').innerHTML =
+    `<div class="wellTitle">${escapeHtml(info.title)}</div>` + (info.rows.length ? rowsToHtmlTable(info.rows) : '');
+}
+
+function populateFEForm(){
+  function fillSelect(id, matchType, optional){
+    const sel = document.getElementById(id);
+    sel.innerHTML='';
+    if(optional){ const o=document.createElement('option'); o.value=''; o.textContent='(none)'; sel.appendChild(o); }
+    let guess = '';
+    app.las.curves.forEach((c, idx)=>{
+      const cls = classify(c.mnemonic);
+      if(cls.type==='DEPTH') return;
+      const o = document.createElement('option'); o.value=idx; o.textContent = c.mnemonic+(c.unit?' ('+c.unit+')':'');
+      sel.appendChild(o);
+      if(cls.type===matchType && guess==='') guess = String(idx);
+    });
+    if(guess!=='') sel.value = guess;
+    else if(optional) sel.value='';
+  }
+  fillSelect('feGR', 'GR', false);
+  fillSelect('feRHOB', 'RHOB', true);
+  fillSelect('feNPHI', 'NPHI', true);
+  fillSelect('feRT', 'RESD', true);
+  fillSelect('feSP', 'SP', true);
+
+  // sensible default GR clean/shale from the 5th/95th percentile of the selected GR curve
+  const grIdx = document.getElementById('feGR').value;
+  if(grIdx!==''){
+    const auto = app.autoRange(parseInt(grIdx));
+    document.getElementById('feGRclean').value = round2(auto.min);
+    document.getElementById('feGRshale').value = round2(auto.max);
+  }
+  document.getElementById('feWetFrom').value = round2(app.fromDepth);
+  document.getElementById('feWetTo').value = round2(app.fromDepth + (app.toDepth-app.fromDepth)*0.05);
+}
+function clampPxPerUnit(range){
+  const target = 1500 / Math.max(range,1);
+  return Math.max(0.5, Math.min(50, target));
+}
+function setStatus(msg){ document.getElementById('status').textContent = msg; }
+
+/* ============================ SIDEBAR CURVE LIST ============================ */
+function renderCurveList(){
+  const list = document.getElementById('curveList');
+  list.innerHTML='';
+  app.las.curves.forEach((c, idx)=>{
+    if(idx===app.depthCurveIdx) return;
+    const cls = classify(c.mnemonic);
+    const row = document.createElement('div');
+    row.className='curve-row';
+    const sw = document.createElement('div');
+    sw.className='swatch'; sw.style.background = cls.color;
+    row.appendChild(sw);
+    const nameSpan = document.createElement('div');
+    nameSpan.className='name';
+    nameSpan.innerHTML = c.mnemonic + (cls.type==='CCL' ? '<span class="ccl-badge">CCL</span>' : '');
+    row.appendChild(nameSpan);
+    const unitSpan = document.createElement('div');
+    unitSpan.className='unit'; unitSpan.textContent = c.unit||'';
+    row.appendChild(unitSpan);
+    const sel = document.createElement('select');
+    const optAdd = document.createElement('option'); optAdd.value=''; optAdd.textContent='+ Add to…';
+    sel.appendChild(optAdd);
+    app.tracks.forEach((t,ti)=>{
+      const o = document.createElement('option'); o.value=t.id; o.textContent='Track '+(ti+1); sel.appendChild(o);
+    });
+    const optNew = document.createElement('option'); optNew.value='new'; optNew.textContent='+ New track';
+    sel.appendChild(optNew);
+    sel.addEventListener('change', ()=>{
+      if(sel.value===''){ return; }
+      let trackId = sel.value==='new' ? app.addTrack() : parseInt(sel.value);
+      app.addCurveToTrack(idx, trackId);
+      sel.value='';
+      render();
+    });
+    row.appendChild(sel);
+    list.appendChild(row);
+  });
+}
+
+/* =============================== RENDERING =============================== */
+const NS='http://www.w3.org/2000/svg';
+function svgEl(tag, attrs){
+  const el = document.createElementNS(NS, tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function niceInterval(target){
+  const pow = Math.pow(10, Math.floor(Math.log10(target)));
+  const n = target/pow;
+  let m;
+  if(n<1.5) m=1; else if(n<3.5) m=2; else if(n<7.5) m=5; else m=10;
+  return m*pow;
+}
+
+function updateDepthPositionOptions(){
+  const sel = document.getElementById('depthPosition');
+  const prev = sel.value!=='' ? parseInt(sel.value) : app.depthInsertIndex;
+  const n = app.tracks.length;
+  sel.innerHTML='';
+  for(let i=0;i<=n;i++){
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = i===0 ? 'Left (start)' : i===n ? 'Right (end)' : `After Track ${i}`;
+    sel.appendChild(o);
+  }
+  const clamped = Math.min(Math.max(prev,0), n);
+  sel.value = clamped;
+  app.depthInsertIndex = clamped;
+}
+
+// returns the ordered list of columns (tracks + the depth column) with their
+// pixel widths and cumulative x-offsets, shared by header rendering, SVG
+// rendering, and the hover/tooltip lookup so all three always agree on layout.
+function computeColumns(){
+  const depthColW = app.depthColWidth || 40;
+  const widths = app.tracks.map(t=> t.width===undefined ? app.trackWidth : t.width);
+  const cols = [];
+  for(let i=0;i<app.tracks.length;i++){
+    if(app.depthInsertIndex===i) cols.push({type:'depth', width:depthColW});
+    cols.push({type:'track', track:app.tracks[i], trackIndex:i, width:widths[i]});
+  }
+  if(app.depthInsertIndex===app.tracks.length || app.tracks.length===0) cols.push({type:'depth', width:depthColW});
+  let x=0;
+  for(const c of cols){ c.x0=x; x+=c.width; }
+  return {cols, totalW:x, depthColW};
+}
+
+function render(){
+  if(!app.las) return;
+  const from = parseFloat(document.getElementById('depthFrom').value);
+  const to = parseFloat(document.getElementById('depthTo').value);
+  if(!isNaN(from)) app.fromDepth = from;
+  if(!isNaN(to)) app.toDepth = to;
+  app.pxPerUnit = parseFloat(document.getElementById('pxPerUnit').value) || app.pxPerUnit;
+  updateDepthPositionOptions();
+  const giVal = document.getElementById('depthGridInterval').value;
+  app.depthGridInterval = giVal==='' ? null : parseFloat(giVal);
+  const dcw = parseFloat(document.getElementById('depthColWidthInput').value);
+  if(!isNaN(dcw) && dcw>=20) app.depthColWidth = dcw;
+
+  renderTrackLegend();
+  renderTrackEditor();
+  renderSVGBody();
+  renderTopsEditor();
+  if(app.feComputed) app.summarizeZone();
+  syncPrintHeaderWidth();
+}
+
+function renderTrackLegend(){
+  const wrap = document.getElementById('trackHeaderWrap');
+  wrap.innerHTML='';
+  const { cols } = computeColumns();
+
+  cols.forEach(col=>{
+    if(col.type==='depth'){
+      const depthHead = document.createElement('div');
+      depthHead.className='depthColHeader';
+      depthHead.style.cssText = 'padding:4px; font-size:11px; color:var(--muted); text-align:center; display:flex; align-items:center; justify-content:center;';
+      depthHead.textContent = 'DEPTH ('+(app.depthUnit||'')+')';
+      wrap.appendChild(depthHead);
+      return;
+    }
+    const track = col.track;
+    if(track.width===undefined) track.width = app.trackWidth;
+    const div = document.createElement('div');
+    div.className='trackHead';
+    div.style.cssText = `width:${track.width}px; display:flex; flex-direction:column; align-items:center;`;
+
+    if(track.curves.length===0){
+      const e = document.createElement('div'); e.className='emptyTrack'; e.textContent='(empty)';
+      div.appendChild(e);
+    }
+    const curveLines = document.createElement('div'); 
+    curveLines.className='curveLines'; 
+    curveLines.style.cssText = 'max-height:none; width:100%; display:flex; flex-direction:column; align-items:center;';
+    
+    track.curves.forEach(cv=>{
+      const block = document.createElement('div');
+      block.style.cssText = 'padding:2px 1px 4px; width:100%; display:flex; flex-direction:column; align-items:center;';
+
+      const name = document.createElement('div');
+      name.style.cssText = `font-size:10px; font-weight:600; color:${cv.color}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; width:100%;`;
+      name.textContent = cv.label ;
+      name.title = cv.label;
+      block.appendChild(name);
+
+      if(!cv.isFlag){
+        const scaleRow = document.createElement('div');
+        scaleRow.style.cssText = `display:flex; align-items:center; gap:3px; font-size:9px; color:${cv.color}; width:90%; justify-content:center;`;
+        const minS = document.createElement('span'); 
+        minS.textContent = fmt(cv.min); 
+        minS.style.cssText = 'flex-shrink:0; text-align:center;';
+        const dash = document.createElement('span');
+        const borderStyle = cv.style==='dotted' ? 'dotted' : (cv.style==='dashed'||cv.style==='dashdot') ? 'dashed' : 'solid';
+        dash.style.cssText = `flex:1; height:0; border-top:2px ${borderStyle} ${cv.color}; margin:0 3px; min-width:20px;`;
+        const maxS = document.createElement('span'); 
+        maxS.textContent = fmt(cv.max); 
+        maxS.style.cssText = 'flex-shrink:0; text-align:center;';
+        scaleRow.appendChild(minS); 
+        scaleRow.appendChild(dash); 
+        scaleRow.appendChild(maxS);
+        block.appendChild(scaleRow);
+      }
+      curveLines.appendChild(block);
+    });
+    div.appendChild(curveLines);
+    wrap.appendChild(div);
+  });
+}
+
+function renderTrackEditor(){
+  const list = document.getElementById('trackEditorList');
+  list.innerHTML='';
+
+  app.tracks.forEach((track, ti)=>{
+    if(track.width===undefined) track.width = app.trackWidth;
+    const block = document.createElement('div'); block.className='track-editor-block';
+
+    const top = document.createElement('div'); top.className='teTop';
+    const idx = document.createElement('span'); idx.textContent='Track '+(ti+1)+' ('+track.width+'px)';
+    const btns = document.createElement('span'); btns.className='thBtns';
+    const wBtn = document.createElement('button'); wBtn.className='small'; wBtn.textContent='↔'; wBtn.title='This track\'s width';
+    wBtn.onclick=()=>{ const w=prompt('Width for Track '+(ti+1)+' (px):', track.width); if(w && !isNaN(w) && parseInt(w)>=40){ track.width=parseInt(w); render(); } };
+    const gBtn = document.createElement('button'); gBtn.className='small'; gBtn.textContent='▦'; gBtn.title='Grid lines (major / minor) for this track';
+    gBtn.onclick=()=>{
+      const maj = prompt('Major gridlines for Track '+(ti+1)+' (blank = auto):', track.gridMajor||'');
+      if(maj===null) return;
+      track.gridMajor = maj.trim()==='' ? null : Math.max(2, parseInt(maj));
+      if(track.gridMajor!==null){
+        const min = prompt('Minor gridlines between each pair of majors (blank = 0):', track.gridMinor||'');
+        track.gridMinor = (min===null || min.trim()==='') ? 0 : Math.max(0, parseInt(min));
+      }
+      render();
+    };
+    const delBtn = document.createElement('button'); delBtn.className='small'; delBtn.textContent='✕'; delBtn.title='Delete track';
+    delBtn.onclick=()=>{ app.tracks = app.tracks.filter(t=>t.id!==track.id); renderCurveList(); render(); };
+    btns.appendChild(wBtn); btns.appendChild(gBtn); btns.appendChild(delBtn);
+    top.appendChild(idx); top.appendChild(btns);
+    block.appendChild(top);
+
+  // Fill options - Individual curve fill
+    const nonFlagCurves = track.curves.filter(c=>!c.isFlag);
+    if(nonFlagCurves.length >= 1){
+      const fillRow = document.createElement('div'); fillRow.className='fillRow';
+      
+      // Enable/disable fill
+      const fillChk = document.createElement('input'); 
+      fillChk.type='checkbox'; 
+      fillChk.checked=!!track.fillCurves;
+      fillChk.onchange=()=>{ track.fillCurves = fillChk.checked; render(); };
+      
+      const fillLabel = document.createElement('span'); 
+      fillLabel.textContent='Fill:';
+      
+      // Dropdown for fill type
+      const typeSel = document.createElement('select');
+      typeSel.style.cssText = 'font-size:9px; padding:1px 2px; max-width:90px;';
+      
+      // Individual curve fill options
+      const optGroup1 = document.createElement('optgroup');
+      optGroup1.label = 'Individual Curve';
+      
+      nonFlagCurves.forEach((cv, idx) => {
+        const o = document.createElement('option');
+        o.value = 'single_' + idx;
+        o.textContent = cv.label + ' from 0';
+        if (track.fillType === 'single_' + idx) o.selected = true;
+        optGroup1.appendChild(o);
+      });
+      typeSel.appendChild(optGroup1);
+      
+      // Crossover fill options (if there are at least 2 curves)
+      if(nonFlagCurves.length >= 2){
+        const optGroup2 = document.createElement('optgroup');
+        optGroup2.label = 'Crossover';
+        
+        const optLt = document.createElement('option'); 
+        optLt.value = 'crossover_lt'; 
+        optLt.textContent = `${nonFlagCurves[0].label} < ${nonFlagCurves[1].label}`;
+        
+        const optGt = document.createElement('option'); 
+        optGt.value = 'crossover_gt'; 
+        optGt.textContent = `${nonFlagCurves[0].label} > ${nonFlagCurves[1].label}`;
+        
+        optGroup2.appendChild(optLt);
+        optGroup2.appendChild(optGt);
+        typeSel.appendChild(optGroup2);
+      }
+      
+      // Set default if not set
+      if (!track.fillType) track.fillType = 'single_0';
+      typeSel.value = track.fillType;
+      
+      typeSel.onchange = () => { 
+        track.fillType = typeSel.value; 
+        render(); 
+      };
+      
+      // Fill direction for individual fills (left/right/both)
+      const dirSel = document.createElement('select');
+      dirSel.style.cssText = 'font-size:9px; padding:1px 2px; max-width:70px;';
+      
+      const optLeft = document.createElement('option'); 
+      optLeft.value='left'; 
+      optLeft.textContent = '←';
+      const optRight = document.createElement('option'); 
+      optRight.value='right'; 
+      optRight.textContent = '→';
+      const optBoth = document.createElement('option'); 
+      optBoth.value='both'; 
+      optBoth.textContent = '↔';
+      
+      dirSel.appendChild(optLeft); 
+      dirSel.appendChild(optRight);
+      dirSel.appendChild(optBoth);
+      dirSel.value = track.fillDirection || 'left';
+      dirSel.onchange = ()=>{ track.fillDirection = dirSel.value; render(); };
+      
+      // Color picker
+      const fillColor = document.createElement('input'); 
+      fillColor.type='color'; 
+      fillColor.value = track.fillColor || '#e0c04c';
+      fillColor.style.cssText='width:14px;height:14px;padding:0;border:none;background:none;';
+      fillColor.oninput=()=>{ track.fillColor = fillColor.value; render(); };
+      
+      // Opacity control
+      const opacityLabel = document.createElement('span');
+      opacityLabel.textContent = 'Op:';
+      opacityLabel.style.cssText = 'font-size:9px;';
+      
+      const opacityInput = document.createElement('input');
+      opacityInput.type = 'range';
+      opacityInput.min = '0.1';
+      opacityInput.max = '1.0';
+      opacityInput.step = '0.05';
+      opacityInput.value = track.fillOpacity || '0.5';
+      opacityInput.style.cssText = 'width:40px; height:4px;';
+      opacityInput.oninput = () => {
+        track.fillOpacity = parseFloat(opacityInput.value);
+        render();
+      };
+      
+      fillRow.appendChild(fillChk);
+      fillRow.appendChild(fillLabel);
+      fillRow.appendChild(typeSel);
+      fillRow.appendChild(dirSel);
+      fillRow.appendChild(opacityLabel);
+      fillRow.appendChild(opacityInput);
+      fillRow.appendChild(fillColor);
+      block.appendChild(fillRow);
+    }
+
+    if(track.curves.length===0){
+      const e = document.createElement('div'); e.className='emptyTrack'; e.textContent='(empty — add a curve)';
+      block.appendChild(e);
+    }
+    const curveLines = document.createElement('div'); curveLines.className='curveLines';
+    track.curves.forEach((cv, ci)=>{
+      const line = document.createElement('div'); line.className='curveLine';
+      const colorInput = document.createElement('input');
+      colorInput.type='color'; colorInput.value = toHex(cv.color);
+      colorInput.style.width='14px'; colorInput.style.height='14px'; colorInput.style.padding='0'; colorInput.style.border='none'; colorInput.style.background='none';
+      colorInput.oninput = ()=>{ cv.color = colorInput.value; render(); };
+
+      const cname = document.createElement('span'); cname.className='cname';
+      cname.textContent = cv.label + (cv.unit? ' ('+cv.unit+')':'') + (cv.isFlag ? ' [flag]' : '');
+      cname.title = cv.label;
+
+      const rmBtn = document.createElement('button'); rmBtn.className='small'; rmBtn.textContent='✕';
+      rmBtn.onclick=()=>{ track.curves.splice(ci,1); render(); };
+
+      line.appendChild(colorInput);
+      line.appendChild(cname);
+
+      if(cv.isFlag){
+        line.appendChild(rmBtn);
+        curveLines.appendChild(line);
+        return;
+      }
+
+      const minI = document.createElement('input'); minI.type='number'; minI.value=cv.min; minI.step='any';
+      minI.onchange=()=>{ cv.min=parseFloat(minI.value); render(); };
+      const maxI = document.createElement('input'); maxI.type='number'; maxI.value=cv.max; maxI.step='any';
+      maxI.onchange=()=>{ cv.max=parseFloat(maxI.value); render(); };
+
+      const scaleSel = document.createElement('select'); scaleSel.className='scaleType';
+      ['linear','log'].forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; if(s===cv.scale) o.selected=true; scaleSel.appendChild(o); });
+      scaleSel.onchange=()=>{ cv.scale=scaleSel.value; render(); };
+
+      const styleSel = document.createElement('select'); styleSel.className='styleSel'; styleSel.title='Line style';
+      [['solid','—'],['dashed','- -'],['dotted','···'],['dashdot','-·-']].forEach(([val,label])=>{
+        const o=document.createElement('option'); o.value=val; o.textContent=label; if(val===(cv.style||'solid')) o.selected=true; styleSel.appendChild(o);
+      });
+      styleSel.onchange=()=>{ cv.style=styleSel.value; render(); };
+
+      const widthI = document.createElement('input'); widthI.type='number'; widthI.className='widthInput';
+      widthI.min='0.5'; widthI.max='6'; widthI.step='0.5'; widthI.value=cv.width; widthI.title='Line width';
+      widthI.onchange=()=>{ cv.width=parseFloat(widthI.value)||1.5; render(); };
+
+      line.appendChild(minI);
+      line.appendChild(maxI);
+      line.appendChild(scaleSel);
+      line.appendChild(styleSel);
+      line.appendChild(widthI);
+      line.appendChild(rmBtn);
+      curveLines.appendChild(line);
+    });
+    block.appendChild(curveLines);
+
+    list.appendChild(block);
+  });
+}
+
+function renderTopsEditor(){
+  const list = document.getElementById('topsList');
+  if(!list) return;
+  list.innerHTML='';
+
+  app.tops.forEach((top, index)=>{
+    const block = document.createElement('div'); 
+    block.className='track-editor-block';
+
+    // Top section with label and delete
+    const top1 = document.createElement('div'); 
+    top1.className='teTop';
+    const labelI = document.createElement('input'); 
+    labelI.type='text'; 
+    labelI.value=top.label;
+    labelI.placeholder='Description (e.g. "Top Sand A")';
+    labelI.style.cssText='flex:1; font-size:11px; padding:2px 5px; margin-right:4px;';
+    labelI.onchange=()=>{ top.label=labelI.value; render(); };
+    const delBtn = document.createElement('button'); 
+    delBtn.className='small'; 
+    delBtn.textContent='✕'; 
+    delBtn.title='Delete this top';
+    delBtn.onclick=()=>{ app.tops = app.tops.filter(t=>t.id!==top.id); render(); };
+    top1.appendChild(labelI); 
+    top1.appendChild(delBtn);
+    block.appendChild(top1);
+
+    // Depth row
+    const depthRow = document.createElement('div'); 
+    depthRow.className='fe-row';
+    const depthLabel = document.createElement('label'); 
+    depthLabel.textContent='Depth';
+    const depthI = document.createElement('input'); 
+    depthI.type='number'; 
+    depthI.step='any'; 
+    depthI.value=top.depth;
+    depthI.onchange=()=>{ const v=parseFloat(depthI.value); if(!isNaN(v)) top.depth=v; render(); };
+    depthRow.appendChild(depthLabel); 
+    depthRow.appendChild(depthI);
+    block.appendChild(depthRow);
+
+    // Color row
+    const colorRow = document.createElement('div'); 
+    colorRow.className='fe-row';
+    const colorLabel = document.createElement('label'); 
+    colorLabel.textContent='Color';
+    const colorI = document.createElement('input'); 
+    colorI.type='color'; 
+    colorI.value=top.color;
+    colorI.style.cssText='width:26px; height:20px; padding:0; border:none; flex:0 0 auto;';
+    colorI.oninput=()=>{ top.color=colorI.value; render(); };
+    colorRow.appendChild(colorLabel); 
+    colorRow.appendChild(colorI);
+    block.appendChild(colorRow);
+
+    // === NEW: Label Format Row ===
+    const formatRow = document.createElement('div'); 
+    formatRow.className='fe-row';
+    const formatLabel = document.createElement('label'); 
+    formatLabel.textContent='Label Format';
+    const formatSel = document.createElement('select');
+    formatSel.style.cssText = 'flex:1; font-size:11px; padding:3px 5px;';
+    
+    const formats = [
+      ['default', 'Default'],
+      ['bold', 'Bold'],
+      ['italic', 'Italic'],
+      ['underline', 'Underline'],
+      ['bolditalic', 'Bold Italic'],
+      ['boldunderline', 'Bold Underline']
+    ];
+    
+    formats.forEach(([val, text]) => {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = text;
+      if (top.labelFormat === val || (!top.labelFormat && val === 'default')) {
+        o.selected = true;
+        if (!top.labelFormat) top.labelFormat = 'default';
+      }
+      formatSel.appendChild(o);
+    });
+    
+    formatSel.onchange = () => {
+      top.labelFormat = formatSel.value;
+      render();
+    };
+    formatRow.appendChild(formatLabel);
+    formatRow.appendChild(formatSel);
+    block.appendChild(formatRow);
+
+    // === NEW: Line Type Row ===
+    const lineRow = document.createElement('div'); 
+    lineRow.className='fe-row';
+    const lineLabel = document.createElement('label'); 
+    lineLabel.textContent='Line Type';
+    const lineSel = document.createElement('select');
+    lineSel.style.cssText = 'flex:1; font-size:11px; padding:3px 5px;';
+    
+    const lineTypes = [
+      ['solid', 'Solid'],
+      ['dashed', 'Dashed'],
+      ['dotted', 'Dotted'],
+      ['dashdot', 'Dash-Dot'],
+      ['longdash', 'Long Dash'],
+      ['thick', 'Thick'],
+      ['thin', 'Thin']
+    ];
+    
+    lineTypes.forEach(([val, text]) => {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = text;
+      if (top.lineType === val || (!top.lineType && val === 'dashed')) {
+        o.selected = true;
+        if (!top.lineType) top.lineType = 'dashed';
+      }
+      lineSel.appendChild(o);
+    });
+    
+    lineSel.onchange = () => {
+      top.lineType = lineSel.value;
+      render();
+    };
+    lineRow.appendChild(lineLabel);
+    lineRow.appendChild(lineSel);
+    block.appendChild(lineRow);
+
+    // Scope (tracks) section
+    const scopeWrap = document.createElement('div'); 
+    scopeWrap.style.cssText='font-size:10px; color:var(--muted); margin-top:4px;';
+    const allLabel = document.createElement('label'); 
+    allLabel.style.cssText='display:flex; align-items:center; gap:5px; margin-bottom:4px; cursor:pointer;';
+    const allChk = document.createElement('input'); 
+    allChk.type='checkbox'; 
+    allChk.checked = top.trackIds.length===0;
+    allChk.onchange=()=>{ top.trackIds = allChk.checked ? [] : app.tracks.map(t=>t.id); render(); };
+    allLabel.appendChild(allChk); 
+    allLabel.appendChild(document.createTextNode('All tracks'));
+    scopeWrap.appendChild(allLabel);
+
+    if(!allChk.checked && app.tracks.length){
+      const grid = document.createElement('div'); 
+      grid.style.cssText='display:flex; flex-wrap:wrap; gap:8px;';
+      app.tracks.forEach((tr,ti)=>{
+        const lbl = document.createElement('label'); 
+        lbl.style.cssText='display:flex; align-items:center; gap:3px; cursor:pointer;';
+        const cb = document.createElement('input'); 
+        cb.type='checkbox'; 
+        cb.checked = top.trackIds.includes(tr.id);
+        cb.onchange=()=>{
+          if(cb.checked){ if(!top.trackIds.includes(tr.id)) top.trackIds.push(tr.id); }
+          else { top.trackIds = top.trackIds.filter(id=>id!==tr.id); }
+          render();
+        };
+        lbl.appendChild(cb); 
+        lbl.appendChild(document.createTextNode('T'+(ti+1)));
+        grid.appendChild(lbl);
+      });
+      scopeWrap.appendChild(grid);
+    }
+    block.appendChild(scopeWrap);
+
+    list.appendChild(block);
+  });
+}
+
+function toHex(c){
+  if(c.startsWith('#')) return c;
+  const d = document.createElement('div'); d.style.color=c; document.body.appendChild(d);
+  const rgb = getComputedStyle(d).color.match(/\d+/g); document.body.removeChild(d);
+  if(!rgb) return '#ffffff';
+  return '#' + rgb.slice(0,3).map(n=>(+n).toString(16).padStart(2,'0')).join('');
+}
+
+function renderSVGBody(){
+  const svg = document.getElementById('svgCanvas');
+  svg.innerHTML='';
+  const { cols, totalW, depthColW } = computeColumns();
+  const range = app.toDepth - app.fromDepth;
+  const H = Math.max(200, range*app.pxPerUnit);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${H}`);
+  svg.setAttribute('width', totalW);
+  svg.setAttribute('height', H);
+  svg.style.display='block';
+
+  // Resolve theme colors to literal hex up front. SVG attributes/styles set to
+  // a literal "var(--x)" string only resolve while this element is attached to
+  // this live document; once the SVG is serialized for PNG/SVG export or for
+  // printing, that reference is lost and the color (and the gridlines using
+  // it) silently disappears. Baking in literal values fixes that everywhere.
+  const colTrackBg = getThemeColor('--track-bg');
+  const colPanel = getThemeColor('--panel');
+  const colGrid = getThemeColor('--grid');
+  const colGridMajor = getThemeColor('--grid-major');
+  const colLabel = '#33383f';
+
+  // explicit background rect (not CSS `background`) so it always shows up on
+  // export/print regardless of browser "print background graphics" settings
+  svg.appendChild(svgEl('rect', {x:0,y:0,width:totalW,height:H,fill:colTrackBg}));
+
+  function yOf(depth){ return (depth - app.fromDepth) * app.pxPerUnit; }
+
+  const depthCol = cols.find(c=>c.type==='depth');
+  const trackCols = cols.filter(c=>c.type==='track');
+
+  // depth gridlines + labels — drawn per track segment so they work no matter
+  // where the depth column sits (left / right / between two tracks)
+  const targetPxGap = 60;
+  const majorInterval = (app.depthGridInterval && app.depthGridInterval>0) ? app.depthGridInterval : niceInterval(targetPxGap/app.pxPerUnit);
+  const minorInterval = majorInterval/5;
+  const depthTicks = []; // {y, depth} for major ticks, reused for labels
+  for(let d = Math.ceil(app.fromDepth/minorInterval)*minorInterval; d<=app.toDepth; d+=minorInterval){
+    const isMajor = Math.abs(Math.round(d/majorInterval)*majorInterval - d) < minorInterval/10;
+    depthTicks.push({y:yOf(d), isMajor, d});
+  }
+
+  const gridGroup = svgEl('g', {});
+  trackCols.forEach(col=>{
+    depthTicks.forEach(t=>{
+      gridGroup.appendChild(svgEl('line', {x1:col.x0, y1:t.y, x2:col.x0+col.width, y2:t.y,
+        stroke: t.isMajor? colGridMajor:colGrid, 'stroke-width': t.isMajor?1:0.5}));
+    });
+  });
+  svg.appendChild(gridGroup);
+
+  // depth column background + ticks/labels
+  svg.appendChild(svgEl('rect',{x:depthCol.x0,y:0,width:depthColW,height:H,fill:colPanel}));
+  depthTicks.filter(t=>t.isMajor).forEach(t=>{
+    const label = svgEl('text', {x:depthCol.x0+depthColW-6, y:t.y+3, fill:colLabel, 'font-size':10, 'text-anchor':'end'});
+    label.textContent = round2(t.d);
+    svg.appendChild(label);
+    svg.appendChild(svgEl('line', {x1:depthCol.x0+depthColW-4, y1:t.y, x2:depthCol.x0+depthColW, y2:t.y, stroke:colGridMajor}));
+  });
+  // track separators + vertical grid + curves
+  trackCols.forEach(col=>{
+    const track = col.track, x0 = col.x0, trackW = col.width;
+    svg.appendChild(svgEl('rect', {x:x0,y:0,width:trackW,height:H,fill:'none',stroke:colGridMajor,'stroke-width':2}));
+
+    if(track.gridMajor){
+      // user-defined generic grid (used regardless of linear/log scale)
+      const majorN = Math.max(2, track.gridMajor);
+      const minorN = Math.max(0, track.gridMinor||0);
+      const majorX = [];
+      for(let i=0;i<majorN;i++){
+        const x = x0 + (i/(majorN-1))*trackW;
+        majorX.push(x);
+        svg.appendChild(svgEl('line',{x1:x,y1:0,x2:x,y2:H,stroke:colGridMajor,'stroke-width':0.8}));
+      }
+      if(minorN>0){
+        for(let i=0;i<majorX.length-1;i++){
+          const xA=majorX[i], xB=majorX[i+1];
+          for(let k=1;k<=minorN;k++){
+            const x = xA + (xB-xA)*k/(minorN+1);
+            svg.appendChild(svgEl('line',{x1:x,y1:0,x2:x,y2:H,stroke:colGrid,'stroke-width':0.3}));
+          }
+        }
+      }
+    } else {
+      const hasLog = track.curves.some(c=>c.scale==='log');
+      if(hasLog){
+        const c = track.curves.find(c=>c.scale==='log');
+        let lo = Math.floor(Math.log10(Math.min(c.min,c.max)||0.1));
+        let hi = Math.ceil(Math.log10(Math.max(c.min,c.max)||1000));
+        for(let dec=lo; dec<=hi; dec++){
+          for(let m=1; m<=9; m++){
+            const v = m*Math.pow(10,dec);
+            const frac = (Math.log10(v)-Math.log10(c.min))/(Math.log10(c.max)-Math.log10(c.min));
+            if(frac<0||frac>1) continue;
+            const x = x0 + frac*trackW;
+            svg.appendChild(svgEl('line',{x1:x,y1:0,x2:x,y2:H,stroke: m===1?colGridMajor:colGrid,'stroke-width':m===1?0.8:0.3}));
+          }
+        }
+      } else {
+        // linear: 4 divisions (5 gridlines)
+        for(let g=0; g<=4; g++){
+          const x = x0 + (g/4)*trackW;
+          svg.appendChild(svgEl('line',{x1:x,y1:0,x2:x,y2:H,stroke:colGrid,'stroke-width':0.3}));
+        }
+      }
+    }
+
+    // shared x-mapper for a given curve, reused by both the fill and the stroke pass
+    function xMapperFor(cv){
+      const isLog = cv.scale==='log';
+      const lmin = isLog? Math.log10(Math.max(cv.min,1e-6)) : cv.min;
+      const lmax = isLog? Math.log10(Math.max(cv.max,1e-6)) : cv.max;
+      return function(v){
+        if(v===null||!isFinite(v)) return null;
+        let vv = isLog ? Math.log10(Math.max(v,1e-6)) : v;
+        let frac = (vv-lmin)/(lmax-lmin);
+        frac = Math.max(-0.02, Math.min(1.02, frac));
+        return x0 + frac*trackW;
+      };
+    }
+
+    // crossover fill between the first two (non-flag) curves, e.g. a
+    // density/neutron overlay — drawn before the curve strokes so the lines
+    // sit on top of the shading. Only the lobes where the chosen curve
+    // actually leads the other are filled (not the whole band between them),
+    // matching the standard log-crossover convention.
+            // Fill based on curve values (Individual OR Crossover)
+    if(track.fillCurves){
+      const nonFlagCurves = track.curves.filter(c=>!c.isFlag);
+      if(nonFlagCurves.length >= 1){
+        const fillType = track.fillType || 'single_0';
+        const dIdx = app.depthCurveIdx;
+        const baseX = x0; // left edge of track
+        const rightX = x0 + trackW; // right edge of track
+        
+        // === INDIVIDUAL CURVE FILL ===
+        if (fillType.startsWith('single_')) {
+          const curveIdx = parseInt(fillType.split('_')[1]);
+          if (nonFlagCurves.length > curveIdx) {
+            const curve = nonFlagCurves[curveIdx];
+            const xMap = xMapperFor(curve);
+            const fillDirection = track.fillDirection || 'left';
+            const fillOpacity = track.fillOpacity || 0.5;
+            
+            // Collect points and values for the curve
+            const pts = [], vals = [];
+            for(const row of app.las.data){
+              const depth = row[dIdx];
+              if(depth===null || depth<app.fromDepth-1 || depth>app.toDepth+1) continue;
+              const y = yOf(depth);
+              const v = row[curve.curveIndex];
+              const x = xMap(v);
+              if(x !== null && isFinite(x)) {
+                pts.push({x, y});
+                vals.push(v);
+              }
+            }
+            
+            if(pts.length < 2) return;
+            
+            // Get min/max for opacity scaling
+            const minVal = arrMin(vals);
+            const maxVal = arrMax(vals);
+            const range = maxVal - minVal || 1;
+            
+            // Build fill path based on direction
+            let d = '';
+            if(fillDirection === 'left'){
+              // Fill from left edge to the curve
+              d = 'M ' + baseX.toFixed(2) + ' ' + pts[0].y.toFixed(2) + ' ';
+              for(let i=0; i<pts.length; i++){
+                d += 'L ' + pts[i].x.toFixed(2) + ' ' + pts[i].y.toFixed(2) + ' ';
+              }
+              d += 'L ' + baseX.toFixed(2) + ' ' + pts[pts.length-1].y.toFixed(2) + ' Z';
+              
+              const avgVal = vals.reduce((a,b)=>a+b,0) / vals.length;
+              const normalizedVal = Math.max(0.2, Math.min(1, (avgVal - minVal) / range));
+              const opacity = fillOpacity * normalizedVal;
+              
+              svg.appendChild(svgEl('path', {
+                d, 
+                fill: track.fillColor || '#e0c04c', 
+                opacity: opacity, 
+                stroke: 'none'
+              }));
+              
+            } else if(fillDirection === 'right'){
+              // Fill from right edge to the curve
+              d = 'M ' + rightX.toFixed(2) + ' ' + pts[0].y.toFixed(2) + ' ';
+              for(let i=0; i<pts.length; i++){
+                d += 'L ' + pts[i].x.toFixed(2) + ' ' + pts[i].y.toFixed(2) + ' ';
+              }
+              d += 'L ' + rightX.toFixed(2) + ' ' + pts[pts.length-1].y.toFixed(2) + ' Z';
+              
+              const avgVal = vals.reduce((a,b)=>a+b,0) / vals.length;
+              const normalizedVal = Math.max(0.2, Math.min(1, (avgVal - minVal) / range));
+              const opacity = fillOpacity * normalizedVal;
+              
+              svg.appendChild(svgEl('path', {
+                d, 
+                fill: track.fillColor || '#e0c04c', 
+                opacity: opacity, 
+                stroke: 'none'
+              }));
+              
+            } else if(fillDirection === 'both'){
+              // Fill from the curve to the bottom of the track
+              let maxY = -Infinity;
+              for(const p of pts){
+                if(p.y > maxY) maxY = p.y;
+              }
+              
+              d = '';
+              for(let i=0; i<pts.length; i++){
+                d += (i===0 ? 'M ' : 'L ') + pts[i].x.toFixed(2) + ' ' + pts[i].y.toFixed(2) + ' ';
+              }
+              d += 'L ' + rightX.toFixed(2) + ' ' + maxY.toFixed(2) + ' ';
+              d += 'L ' + baseX.toFixed(2) + ' ' + maxY.toFixed(2) + ' ';
+              d += 'Z';
+              
+              const avgVal = vals.reduce((a,b)=>a+b,0) / vals.length;
+              const normalizedVal = Math.max(0.2, Math.min(1, (avgVal - minVal) / range));
+              const opacity = fillOpacity * normalizedVal;
+              
+              svg.appendChild(svgEl('path', {
+                d, 
+                fill: track.fillColor || '#e0c04c', 
+                opacity: opacity, 
+                stroke: 'none'
+              }));
+            }
+          }
+        }
+        
+        // === CROSSOVER FILL ===
+        else if (fillType === 'crossover_lt' || fillType === 'crossover_gt') {
+          if (nonFlagCurves.length >= 2) {
+            const fillPair = nonFlagCurves.slice(0,2);
+            const xA = xMapperFor(fillPair[0]);
+            const xB = xMapperFor(fillPair[1]);
+            
+            const ptsA = [], ptsB = [], valA = [];
+            for(const row of app.las.data){
+              const depth = row[dIdx];
+              if(depth===null || depth<app.fromDepth-1 || depth>app.toDepth+1) continue;
+              const y = yOf(depth);
+              const a = xA(row[fillPair[0].curveIndex]);
+              const b = xB(row[fillPair[1].curveIndex]);
+              const v = row[fillPair[0].curveIndex];
+              if(a !== null && b !== null && isFinite(a) && isFinite(b)) {
+                ptsA.push({x:a,y});
+                ptsB.push({x:b,y});
+                valA.push(v);
+              }
+            }
+            
+            if(ptsA.length < 2) return;
+            
+            const wantLt = (fillType === 'crossover_lt');
+            const wins = (ax,bx)=> wantLt ? ax < bx : ax > bx;
+            
+            // Get min/max for opacity scaling
+            const minVal = arrMin(valA);
+            const maxVal = arrMax(valA);
+            const range = maxVal - minVal || 1;
+            const fillOpacity = track.fillOpacity || 0.5;
+            
+            let cur = null; // {top:[], bot:[], vals:[]}
+            const flush = ()=>{
+              if(!cur || cur.top.length<2) { cur=null; return; }
+              const d = 'M '+cur.top.map(p=>p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' L ')+
+                        ' L '+cur.bot.slice().reverse().map(p=>p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' L ')+' Z';
+              const avgVal = cur.vals.reduce((a,b)=>a+b,0) / cur.vals.length;
+              const normalizedVal = Math.max(0.2, Math.min(1, (avgVal - minVal) / range));
+              const opacity = fillOpacity * normalizedVal;
+              
+              svg.appendChild(svgEl('path', {
+                d, 
+                fill: track.fillColor || '#e0c04c', 
+                opacity: opacity, 
+                stroke: 'none'
+              }));
+              cur = null;
+            };
+            
+            for(let i=0;i<ptsA.length-1;i++){
+              const p1=ptsA[i], q1=ptsB[i], p2=ptsA[i+1], q2=ptsB[i+1];
+              if(!p1||!q1||!p2||!q2){ flush(); continue; }
+              const w1 = wins(p1.x,q1.x), w2 = wins(p2.x,q2.x);
+              if(w1 && w2){
+                if(!cur) cur = {top:[], bot:[], vals:[]};
+                cur.top.push(p1); cur.bot.push(q1); cur.vals.push(valA[i]);
+                if(i===ptsA.length-2){ cur.top.push(p2); cur.bot.push(q2); cur.vals.push(valA[i+1]); }
+              } else if(w1!==w2){
+                const diff1 = p1.x-q1.x, diff2 = p2.x-q2.x;
+                const t = diff1/(diff1-diff2);
+                const xc = p1.x + t*(p2.x-p1.x), yc = p1.y + t*(p2.y-p1.y);
+                const vc = valA[i] + t*(valA[i+1]-valA[i]);
+                if(w1){
+                  if(!cur) cur = {top:[], bot:[], vals:[]};
+                  cur.top.push(p1); cur.bot.push(q1); cur.vals.push(valA[i]);
+                  cur.top.push({x:xc,y:yc}); cur.bot.push({x:xc,y:yc}); cur.vals.push(vc);
+                  flush();
+                } else {
+                  cur = {top:[{x:xc,y:yc}], bot:[{x:xc,y:yc}], vals:[vc]};
+                }
+              } else { flush(); }
+            }
+            flush();
+          }
+        }
+      }
+    }
+
+// Helper function to convert hex color to RGB
+function hexToRgb(hex) {
+  let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if(result) {
+    return {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    };
+  }
+  // Default to yellow if parsing fails
+  return {r: 224, g: 192, b: 76};
+}
+    // draw each curve
+    track.curves.forEach(cv=>{
+      const dIdx = app.depthCurveIdx;
+
+      if(cv.isFlag){
+        // render as filled bars over contiguous depth intervals where value===1
+        const step = app.depthStep ? app.depthStep() : 1;
+        let barStartY = null, lastY = null;
+        const flushBar = (endY)=>{
+          if(barStartY===null) return;
+          svg.appendChild(svgEl('rect', {
+            x:x0+1, y:Math.min(barStartY,endY), width:trackW-2, height:Math.max(1,Math.abs(endY-barStartY)),
+            fill:cv.color, opacity:0.85
+          }));
+          barStartY = null;
+        };
+        for(const row of app.las.data){
+          const depth = row[dIdx];
+          if(depth===null || depth<app.fromDepth-1 || depth>app.toDepth+1) continue;
+          const v = row[cv.curveIndex];
+          const y = yOf(depth);
+          if(v===1){
+            if(barStartY===null) barStartY = y;
+            lastY = y;
+          } else {
+            flushBar(y);
+          }
+        }
+        flushBar(lastY!==null? lastY + step*app.pxPerUnit : null);
+        return;
+      }
+
+      const xOf = xMapperFor(cv);
+      let d = '';
+      let pen = false;
+      for(const row of app.las.data){
+        const depth = row[dIdx];
+        if(depth===null || depth<app.fromDepth-1 || depth>app.toDepth+1) continue;
+        const v = row[cv.curveIndex];
+        const y = yOf(depth);
+        const x = xOf(v);
+        if(x===null){ pen=false; continue; }
+        if(!pen){ d += `M ${x.toFixed(2)} ${y.toFixed(2)} `; pen=true; }
+        else { d += `L ${x.toFixed(2)} ${y.toFixed(2)} `; }
+      }
+      if(d){
+        const dashMap = {solid:null, dashed:'6,4', dotted:'1.5,3', dashdot:'6,3,1.5,3'};
+        const dashArr = dashMap[cv.style] || null;
+        const attrs = {d, fill:'none', stroke:cv.color, 'stroke-width':cv.width, 'vector-effect':'non-scaling-stroke'};
+        if(dashArr) attrs['stroke-dasharray'] = dashArr;
+        const path = svgEl('path', attrs);
+        svg.appendChild(path);
+      }
+    });
+  });
+
+  // Sand tops / formation markers — drawn last so they sit visually on top
+  // of the curves and shading, spanning whichever tracks each top is scoped to.
+  app.tops.forEach(top=>{
+    if(top.depth < app.fromDepth || top.depth > app.toDepth) return;
+    const y = yOf(top.depth);
+    const scoped = trackCols.filter(c => top.trackIds.length===0 || top.trackIds.includes(c.track.id));
+    if(scoped.length===0) return;
+    
+    // Get line style based on lineType
+    const lineStyle = getLineStyle(top.lineType || 'dashed');
+    const lineWidth = getLineWidth(top.lineType || 'dashed');
+    
+    scoped.forEach(c=>{
+      svg.appendChild(svgEl('line', {
+        x1:c.x0, 
+        y1:y, 
+        x2:c.x0+c.width, 
+        y2:y, 
+        stroke:top.color, 
+        'stroke-width':lineWidth, 
+        'stroke-dasharray':lineStyle
+      }));
+    });
+    
+    // Get label format
+    const labelFormat = top.labelFormat || 'default';
+    let fontWeight = 'normal';
+    let fontStyle = 'normal';
+    let textDecoration = 'none';
+    
+    if (labelFormat.includes('bold')) fontWeight = 'bold';
+    if (labelFormat.includes('italic')) fontStyle = 'italic';
+    if (labelFormat.includes('underline')) textDecoration = 'underline';
+    
+    // Position label across the full scoped span, not just the last column.
+    const firstCol = scoped[0];
+    const lastCol = scoped[scoped.length - 1];
+    if (!firstCol || !lastCol) return;
+    const labelX = firstCol.x0 + ((lastCol.x0 + lastCol.width) - firstCol.x0) / 2;
+    const label = svgEl('text', {
+      x:labelX, 
+      y:y-3, 
+      fill:top.color, 
+      'font-size':10, 
+      'font-weight':fontWeight,
+      'font-style':fontStyle,
+      'text-decoration':textDecoration,
+      'text-anchor':'middle'
+    });
+    label.textContent = top.label;
+    svg.appendChild(label);
+  });
+}
+
+// Helper function to get line dasharray based on line type - MOVED OUTSIDE renderSVGBody
+function getLineStyle(lineType) {
+  const styles = {
+    'solid': 'none',
+    'dashed': '5,3',
+    'dotted': '1,2',
+    'dashdot': '5,3,1,3',
+    'longdash': '8,3'
+  };
+  return styles[lineType] || styles['dashed'];
+}
+
+// Helper function to get line width based on line type - MOVED OUTSIDE renderSVGBody
+function getLineWidth(lineType) {
+  const widths = {
+    'solid': 1.5,
+    'dashed': 1.5,
+    'dotted': 1.0,
+    'dashdot': 1.5,
+    'longdash': 1.5,
+    'thick': 2.5,
+    'thin': 0.8
+  };
+  return widths[lineType] || widths['dashed'];
+}
+
+function fmt(n){
+  if(Math.abs(n)>=1000) return n.toFixed(0);
+  if(Math.abs(n)>=10) return n.toFixed(1);
+  return n.toFixed(2);
+}
+
+function wireAccordion(headerId, wrapId){
+  document.getElementById(headerId).addEventListener('click', function(){
+    const wrap = document.getElementById(wrapId);
+    const collapsed = wrap.classList.toggle('collapsed');
+    this.classList.toggle('collapsed', collapsed);
+  });
+}
+wireAccordion('fileInfoHeader', 'fileInfoWrap');
+wireAccordion('curvesHeading', 'curveListWrap');
+wireAccordion('feHeading', 'feWrap');
+wireAccordion('wellHeaderHeading', 'wellHeaderWrap');
+wireAccordion('trackEditorHeading', 'trackEditorWrap');
+wireAccordion('topsHeading', 'topsWrap');
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+
+function toggleTrackPanel(){
+  const wrap = document.getElementById('trackHeaderWrap');
+  const btn = document.getElementById('trackPanelToggle');
+  const collapsed = wrap.classList.toggle('collapsed');
+  btn.textContent = (collapsed ? '▸' : '▾') + ' Track Scales';
+}
+
+document.getElementById('depthFrom').addEventListener('change', render);
+document.getElementById('depthTo').addEventListener('change', render);
+document.getElementById('pxPerUnit').addEventListener('change', render);
+document.getElementById('depthPosition').addEventListener('change', render);
+document.getElementById('depthGridInterval').addEventListener('change', render);
+document.getElementById('depthColWidthInput').addEventListener('change', render);
+document.getElementById('plotFileInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  app.openPlot(file);
+  // Reset the input so the same file can be selected again
+  this.value = '';
+});
+
+/* ============================ CURSOR VALUE READOUT ============================ */
+// finds the data row whose depth is closest to `depth`. Assumes las.data is
+// monotonic in depth (standard LAS requirement) for an O(log n) binary
+// search; falls back to a linear scan only if it hits an unindexed null.
+function findNearestRowIndex(depth){
+  const data = app.las.data, dIdx = app.depthCurveIdx, n = data.length;
+  if(n===0) return -1;
+  const asc = data[n-1][dIdx] >= data[0][dIdx];
+  let lo=0, hi=n-1;
+  while(lo<hi){
+    const mid = (lo+hi)>>1;
+    const dm = data[mid][dIdx];
+    if(dm===null){
+      let best=0, bestDiff=Infinity;
+      for(let i=0;i<n;i++){ const dv=data[i][dIdx]; if(dv===null) continue; const diff=Math.abs(dv-depth); if(diff<bestDiff){bestDiff=diff; best=i;} }
+      return best;
+    }
+    if(asc ? dm<depth : dm>depth) lo=mid+1; else hi=mid;
+  }
+  if(lo>0){
+    const d1=data[lo-1][dIdx], d2=data[lo][dIdx];
+    if(d1!==null && d2!==null && Math.abs(d1-depth)<Math.abs(d2-depth)) return lo-1;
+  }
+  return lo;
+}
+
+function initHoverInteraction(){
+  const wrap = document.getElementById('trackBodyWrap');
+  const tooltip = document.getElementById('hoverTooltip');
+  const crosshair = document.getElementById('hoverCrosshair');
+  let raf = null;
+
+  wrap.addEventListener('mousemove', (e)=>{
+    if(!app.las) return;
+    if(raf) return;
+    raf = requestAnimationFrame(()=>{ raf=null; handleHover(e); });
+  });
+  wrap.addEventListener('mouseleave', ()=>{
+    tooltip.style.display='none';
+    crosshair.style.display='none';
+  });
+
+  function handleHover(e){
+    const svg = document.getElementById('svgCanvas');
+    if(!svg || !svg.getBoundingClientRect) return;
+    const rect = svg.getBoundingClientRect();
+    const localX = e.clientX - rect.left;
+    const localY = e.clientY - rect.top;
+    if(localX<0 || localY<0 || localX>rect.width || localY>rect.height){
+      tooltip.style.display='none'; crosshair.style.display='none';
+      return;
+    }
+    const depth = app.fromDepth + localY/app.pxPerUnit;
+    const idx = findNearestRowIndex(depth);
+    if(idx<0){ tooltip.style.display='none'; crosshair.style.display='none'; return; }
+    const row = app.las.data[idx];
+    const rowDepth = row[app.depthCurveIdx];
+
+    const { cols } = computeColumns();
+    const col = cols.find(c=>c.type==='track' && localX>=c.x0 && localX<c.x0+c.width);
+
+    let html = `<div style="font-weight:600;margin-bottom:3px;">Depth: ${fmt(rowDepth)} ${app.depthUnit}</div>`;
+    if(col){
+      col.track.curves.forEach(cv=>{
+        const v = row[cv.curveIndex];
+        html += `<div><span style="display:inline-block;width:8px;height:8px;background:${cv.color};margin-right:5px;border-radius:2px;"></span>`+
+                `${escapeHtml(cv.label)}: <b>${v===null?'—':fmt(v)}</b>${cv.unit?' '+escapeHtml(cv.unit):''}</div>`;
+      });
+    } else {
+      html += `<div style="color:var(--muted);">(hover over a track for curve values)</div>`;
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display='block';
+    let left = e.clientX+14, top = e.clientY+14;
+    const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+    if(left+tw > window.innerWidth-8) left = e.clientX-tw-14;
+    if(top+th > window.innerHeight-8) top = e.clientY-th-14;
+    tooltip.style.left = left+'px';
+    tooltip.style.top = top+'px';
+
+    crosshair.style.display='block';
+    crosshair.style.top = (wrap.scrollTop + localY) + 'px';
+  }
+}
+initHoverInteraction();
+</script>
+</body>
+</html>
