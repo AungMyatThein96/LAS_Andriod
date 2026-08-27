@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>LAS Log Viewer (A.M.Thein_Geol)</title>
 <style>
   :root{
@@ -53,6 +54,63 @@
   .acc-wrap{overflow:hidden; max-height:2000px; transition:max-height .25s ease;}
   .acc-wrap.collapsed{max-height:0;}
   #sidebarToggle{flex-shrink:0;}
+
+  /* Mobile layout: keep the log viewer full width and make the side panel
+     an overlay. This is much easier to use on phones than reserving 270px
+     of the screen for the panel. */
+  #horizontalTrackScroll{
+    display:none;
+    width:100%;
+    height:18px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    background:var(--panel);
+    border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border);
+    -webkit-overflow-scrolling:touch;
+  }
+  #horizontalTrackScroll > div{height:1px; min-width:100%;}
+  #horizontalTrackScroll::-webkit-scrollbar{height:14px;}
+  #horizontalTrackScroll::-webkit-scrollbar-track{background:var(--panel2);}
+  #horizontalTrackScroll::-webkit-scrollbar-thumb{background:#6b7280; border-radius:7px;}
+
+  @media (max-width:700px){
+    header{
+      flex-wrap:nowrap;
+      overflow-x:auto;
+      overflow-y:hidden;
+      -webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+      padding:6px 8px;
+      min-height:52px;
+    }
+    header::-webkit-scrollbar{display:none;}
+    header .grp{flex-shrink:0;}
+    header h1{flex-shrink:0; white-space:nowrap;}
+    .main{position:relative; min-height:0;}
+    #sidebar{
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width:280px; min-width:280px;
+      z-index:100;
+      box-shadow:3px 0 14px rgba(0,0,0,.18);
+      transition:transform .25s ease;
+    }
+    #sidebar.collapsed{
+      width:280px !important;
+      min-width:280px;
+      padding-left:10px;
+      padding-right:10px;
+      border-right:1px solid var(--border);
+      transform:translateX(-105%);
+      overflow-y:auto;
+    }
+    .viewer{width:100%; min-width:0;}
+    #trackBodyWrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+    #trackHeaderWrap{overflow-x:auto; overflow-y:hidden;}
+    #trackHeaderWrap > *{flex-shrink:0;}
+    #status{font-size:10px; padding:5px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  }
   #trackHeaderWrap{transition:max-height .25s ease; max-height:300px;}
   #trackHeaderWrap.collapsed{max-height:0; border-bottom:none;}
   #trackPanelToggle{flex-shrink:0;}
@@ -91,8 +149,8 @@
   .swatch{width:12px; height:12px; border-radius:2px; flex-shrink:0; border:1px solid #0006;}
   #fileInfo{font-size:11px; color:var(--muted); line-height:1.5; white-space:pre-wrap;}
   .viewer{flex:1; display:flex; flex-direction:column; min-width:0; background:var(--track-bg);}
-  #trackHeaderWrap{display:flex; border-bottom:2px solid var(--grid-major); background:var(--panel); flex-shrink:0; overflow:hidden;}
-  #trackBodyWrap{flex:1; overflow-y:auto; overflow-x:hidden; position:relative;}
+  #trackHeaderWrap{display:flex; border-bottom:2px solid var(--grid-major); background:var(--panel); flex-shrink:0; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;}
+  #trackBodyWrap{flex:1; min-width:0; overflow-y:auto; overflow-x:auto; position:relative; -webkit-overflow-scrolling:touch;}
   .depthColHeader, .depthCol{width:40px; flex-shrink:0; border-right:1px solid var(--grid-major); background:var(--panel);}
   .trackHead{
     flex-shrink:0; border-right:1px solid var(--grid-major); padding:4px 4px 6px; position:relative;
@@ -2391,7 +2449,18 @@ wireAccordion('trackEditorHeading', 'trackEditorWrap');
 wireAccordion('topsHeading', 'topsWrap');
 
 function toggleSidebar(){
-  document.getElementById('sidebar').classList.toggle('collapsed');
+  const sidebar = document.getElementById('sidebar');
+  const button = document.getElementById('sidebarToggle');
+  const collapsed = sidebar.classList.toggle('collapsed');
+  button.textContent = collapsed ? '☰ Panel' : '✕ Panel';
+
+  // The viewer/SVG uses the available width. Re-render after the CSS
+  // transition so the main track immediately expands when the panel closes.
+  window.dispatchEvent(new Event('resize'));
+  setTimeout(()=>{
+    window.dispatchEvent(new Event('resize'));
+    if(app && app.las) render();
+  }, 280);
 }
 
 function toggleTrackPanel(){
@@ -2400,6 +2469,35 @@ function toggleTrackPanel(){
   const collapsed = wrap.classList.toggle('collapsed');
   btn.textContent = (collapsed ? '▸' : '▾') + ' Track Scales';
 }
+
+// Synchronize the dedicated horizontal scrollbar with the main track viewport.
+(function initHorizontalTrackScroll(){
+  const body = document.getElementById('trackBodyWrap');
+  const bar = document.getElementById('horizontalTrackScroll');
+  const header = document.getElementById('trackHeaderWrap');
+  if(!body || !bar) return;
+  let syncing = false;
+  bar.addEventListener('scroll', ()=>{
+    if(syncing) return;
+    syncing = true;
+    body.scrollLeft = bar.scrollLeft;
+    if(header) header.scrollLeft = bar.scrollLeft;
+    syncing = false;
+  }, {passive:true});
+  body.addEventListener('scroll', ()=>{
+    if(syncing) return;
+    syncing = true;
+    bar.scrollLeft = body.scrollLeft;
+    if(header) header.scrollLeft = body.scrollLeft;
+    syncing = false;
+  }, {passive:true});
+  window.addEventListener('resize', ()=>{
+    const inner = document.getElementById('horizontalTrackScrollInner');
+    if(inner) inner.style.width = Math.max(document.getElementById('svgCanvas')?.getBoundingClientRect().width || 0, bar.clientWidth) + 'px';
+    bar.scrollLeft = body.scrollLeft;
+    if(header) header.scrollLeft = body.scrollLeft;
+  });
+})();
 
 document.getElementById('depthFrom').addEventListener('change', render);
 document.getElementById('depthTo').addEventListener('change', render);
