@@ -106,8 +106,9 @@
       overflow-y:auto;
     }
     .viewer{width:100%; min-width:0;}
-    #trackBodyWrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
-    #trackHeaderWrap{overflow-x:auto; overflow-y:hidden;}
+    #trackBodyWrap{overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+    #trackBodyWrap::-webkit-scrollbar:horizontal{height:0;}
+    #trackHeaderWrap{overflow-x:hidden; overflow-y:hidden;}
     #trackHeaderWrap > *{flex-shrink:0;}
     #status{font-size:10px; padding:5px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   }
@@ -149,8 +150,12 @@
   .swatch{width:12px; height:12px; border-radius:2px; flex-shrink:0; border:1px solid #0006;}
   #fileInfo{font-size:11px; color:var(--muted); line-height:1.5; white-space:pre-wrap;}
   .viewer{flex:1; display:flex; flex-direction:column; min-width:0; background:var(--track-bg);}
-  #trackHeaderWrap{display:flex; border-bottom:2px solid var(--grid-major); background:var(--panel); flex-shrink:0; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;}
+  #trackHeaderWrap{display:flex; border-bottom:2px solid var(--grid-major); background:var(--panel); flex-shrink:0; overflow-x:hidden; overflow-y:hidden;}
   #trackBodyWrap{flex:1; min-width:0; overflow-y:auto; overflow-x:auto; position:relative; -webkit-overflow-scrolling:touch;}
+  /* The log body owns horizontal movement. The legend/header never scrolls
+     independently; its scrollLeft is synchronized with the body. */
+  #trackBodyWrap::-webkit-scrollbar:horizontal{height:0;}
+  #trackBodyWrap{scrollbar-width:auto;}
   .depthColHeader, .depthCol{width:40px; flex-shrink:0; border-right:1px solid var(--grid-major); background:var(--panel);}
   .trackHead{
     flex-shrink:0; border-right:1px solid var(--grid-major); padding:4px 4px 6px; position:relative;
@@ -316,7 +321,7 @@
   <div class="grp" id="exportCtrls" style="display:none;">
     <button onclick="app.exportPNG()">⬇ PNG</button>
     <button onclick="app.exportSVG()">⬇ SVG</button>
-    <button onclick="window.print()">🖨 Print</button>
+    <button onclick="printLog()">🖨 Print</button>
  </div>
  <div class="grp" id="plotFileCtrls">
     <button onclick="app.savePlot()" title="Save the loaded data, tracks, tops and settings to a file">💾 Save Plot</button>
@@ -430,6 +435,9 @@
     <div id="trackBodyWrap" style="display:none;">
       <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="hoverCrosshair"></div>
+    </div>
+    <div id="horizontalTrackScroll" style="display:none;" aria-label="Horizontal log track scroll">
+      <div id="horizontalTrackScrollInner"></div>
     </div>
   </div>
   <div id="hoverTooltip"></div>
@@ -1149,12 +1157,58 @@ addTop(){
   }
 };
 
-function downloadBlob(blob, filename){
+async function downloadBlob(blob, filename){
+  // Android WebView does not reliably implement the browser <a download>
+  // mechanism. Send the file to the native Android document picker in small
+  // chunks so large PNG/SVG exports do not exceed the WebView bridge limit.
+  if(window.Android && typeof window.Android.saveBlobChunk === 'function'){
+    try{
+      const buffer = new Uint8Array(await blob.arrayBuffer());
+      const chunkSize = 48 * 1024;
+
+      if(buffer.length === 0){
+        window.Android.saveBlobChunk('', filename, blob.type || 'application/octet-stream', true, true);
+        return;
+      }
+
+      for(let offset=0; offset<buffer.length; offset+=chunkSize){
+        const part = buffer.subarray(offset, Math.min(offset+chunkSize, buffer.length));
+        let binary = '';
+        for(let i=0;i<part.length;i++) binary += String.fromCharCode(part[i]);
+        const base64 = btoa(binary);
+        const first = offset === 0;
+        const last = offset + part.length >= buffer.length;
+        window.Android.saveBlobChunk(
+          base64, filename, blob.type || 'application/octet-stream', first, last
+        );
+      }
+      return;
+    }catch(err){
+      console.error('Android export failed:', err);
+      alert('Could not prepare the export file: ' + err.message);
+      return;
+    }
+  }
+
+  // Browser fallback.
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  a.href = url;
   a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
+
+function printLog(){
+  if(window.Android && typeof window.Android.printPage === 'function'){
+    window.Android.printPage();
+  }else{
+    window.print();
+  }
+}
+
 function round2(n){ return Math.round(n*100)/100; }
 function round3(n){ return Math.round(n*1000)/1000; }
 // Safe min/max over large arrays — avoids "Maximum call stack size exceeded"
@@ -1520,6 +1574,7 @@ function render(){
   renderTrackLegend();
   renderTrackEditor();
   renderSVGBody();
+  if(window.updateHorizontalTrackScroll) window.updateHorizontalTrackScroll();
   renderTopsEditor();
   if(app.feComputed) app.summarizeZone();
   syncPrintHeaderWidth();
@@ -2470,33 +2525,68 @@ function toggleTrackPanel(){
   btn.textContent = (collapsed ? '▸' : '▾') + ' Track Scales';
 }
 
-// Synchronize the dedicated horizontal scrollbar with the main track viewport.
+// Synchronize horizontal movement: the LOG BODY is the only horizontal
+// scrolling viewport. The legend/header follows it programmatically so each
+// curve label stays directly above its curve. A dedicated scrollbar below the
+// log is provided on touch devices because the SVG itself has no visible bar.
 (function initHorizontalTrackScroll(){
   const body = document.getElementById('trackBodyWrap');
   const bar = document.getElementById('horizontalTrackScroll');
+  const inner = document.getElementById('horizontalTrackScrollInner');
   const header = document.getElementById('trackHeaderWrap');
-  if(!body || !bar) return;
+  if(!body || !bar || !inner) return;
+
   let syncing = false;
-  bar.addEventListener('scroll', ()=>{
+
+  function syncFromBody(){
+    if(syncing) return;
+    syncing = true;
+    if(header) header.scrollLeft = body.scrollLeft;
+    bar.scrollLeft = body.scrollLeft;
+    syncing = false;
+  }
+
+  function syncFromBar(){
     if(syncing) return;
     syncing = true;
     body.scrollLeft = bar.scrollLeft;
     if(header) header.scrollLeft = bar.scrollLeft;
     syncing = false;
-  }, {passive:true});
-  body.addEventListener('scroll', ()=>{
-    if(syncing) return;
-    syncing = true;
-    bar.scrollLeft = body.scrollLeft;
-    if(header) header.scrollLeft = body.scrollLeft;
-    syncing = false;
-  }, {passive:true});
+  }
+
+  function updateBar(){
+    const svg = document.getElementById('svgCanvas');
+    const width = svg ? Math.ceil(svg.getBoundingClientRect().width || svg.scrollWidth || 0) : 0;
+    const viewport = body.clientWidth || 0;
+    inner.style.width = Math.max(width, viewport) + 'px';
+
+    // Only show the extra scrollbar when the log is actually wider than the phone.
+    const needed = width > viewport + 1;
+    bar.style.display = needed ? 'block' : 'none';
+    if(needed) bar.scrollLeft = body.scrollLeft;
+  }
+
+  bar.addEventListener('scroll', syncFromBar, {passive:true});
+  body.addEventListener('scroll', syncFromBody, {passive:true});
+
   window.addEventListener('resize', ()=>{
-    const inner = document.getElementById('horizontalTrackScrollInner');
-    if(inner) inner.style.width = Math.max(document.getElementById('svgCanvas')?.getBoundingClientRect().width || 0, bar.clientWidth) + 'px';
-    bar.scrollLeft = body.scrollLeft;
+    updateBar();
     if(header) header.scrollLeft = body.scrollLeft;
   });
+
+  // render() runs after this initialization; a MutationObserver catches SVG
+  // size changes without requiring every rendering path to know about the bar.
+  const svg = document.getElementById('svgCanvas');
+  if(svg){
+    new MutationObserver(updateBar).observe(svg, {attributes:true, childList:true, subtree:true});
+  }
+
+  window.updateHorizontalTrackScroll = function(){
+    updateBar();
+    if(header) header.scrollLeft = body.scrollLeft;
+  };
+
+  setTimeout(updateBar, 0);
 })();
 
 document.getElementById('depthFrom').addEventListener('change', render);
