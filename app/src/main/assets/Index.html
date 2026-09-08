@@ -785,9 +785,11 @@ addTop(){
       const auto = this.autoRange(curveIndex);
       min = auto.min; max = auto.max;
     }
+    const isPayFlag = cls.type==='PAY' || /^(PAY_?ZONE|PAY_?FLAG|NETPAY|PAY)$/i.test(curve.mnemonic);
     track.curves.push({
       curveIndex, color: cls.color, min, max, scale: cls.scale || 'linear', width: 1.5, style: 'solid',
-      label: curve.mnemonic, unit: curve.unit, isCCL: cls.type==='CCL', isFlag: cls.type==='PAY'
+      label: curve.mnemonic, unit: isPayFlag ? 'FLAG' : curve.unit,
+      isCCL: cls.type==='CCL', isFlag: isPayFlag
     });
   },
 
@@ -937,6 +939,12 @@ addTop(){
       for(let r=0;r<this.las.data.length;r++){ this.las.data[r][idx] = values[r]; }
     } else {
       for(let r=0;r<this.las.data.length;r++){ this.las.data[r][idx] = values[r]; }
+      // Computed PAY_ZONE is a flag/bar track, never a numeric 0–1 curve.
+      const c = this.las.curves[idx];
+      if(/^PAY_?ZONE$|^PAY_?FLAG$|^NETPAY$|^PAY$/i.test(c.mnemonic)) {
+        c.unit = 'FLAG';
+        c.desc = desc || 'Net Pay Flag (computed)';
+      }
     }
     return idx;
   },
@@ -1618,7 +1626,17 @@ function renderTrackLegend(){
       name.title = cv.label;
       block.appendChild(name);
 
-      if(!cv.isFlag){
+      if(cv.isFlag){
+        const flagRow = document.createElement('div');
+        flagRow.style.cssText = `display:flex; align-items:center; justify-content:center; gap:5px; width:90%; font-size:9px; color:${cv.color};`;
+        const flagBox = document.createElement('span');
+        flagBox.style.cssText = `display:inline-block; width:22px; height:9px; background:${cv.color}; opacity:.85; border:1px solid ${cv.color};`;
+        const flagText = document.createElement('span');
+        flagText.textContent = 'FLAG';
+        flagRow.appendChild(flagBox);
+        flagRow.appendChild(flagText);
+        block.appendChild(flagRow);
+      } else {
         const scaleRow = document.createElement('div');
         scaleRow.style.cssText = `display:flex; align-items:center; gap:3px; font-size:9px; color:${cv.color}; width:90%; justify-content:center;`;
         const minS = document.createElement('span'); 
@@ -1797,7 +1815,7 @@ function renderTrackEditor(){
       colorInput.oninput = ()=>{ cv.color = colorInput.value; render(); };
 
       const cname = document.createElement('span'); cname.className='cname';
-      cname.textContent = cv.label + (cv.unit? ' ('+cv.unit+')':'') + (cv.isFlag ? ' [flag]' : '');
+      cname.textContent = cv.label + (cv.isFlag ? ' (FLAG)' : (cv.unit ? ' ('+cv.unit+')' : ''));
       cname.title = cv.label;
 
       const rmBtn = document.createElement('button'); rmBtn.className='small'; rmBtn.textContent='✕';
@@ -2351,31 +2369,47 @@ function hexToRgb(hex) {
     track.curves.forEach(cv=>{
       const dIdx = app.depthCurveIdx;
 
-      if(cv.isFlag){
-        // render as filled bars over contiguous depth intervals where value===1
+      const flagCurve = cv.isFlag || /^(PAY_?ZONE|PAY_?FLAG|NETPAY|PAY)$/i.test(cv.label || '');
+      if(flagCurve){
+        // PAY_ZONE is a categorical flag/bar, not a numeric curve.
+        // Fill the full track width from each pay-zone TOP to its BOTTOM.
         const step = app.depthStep ? app.depthStep() : 1;
-        let barStartY = null, lastY = null;
+        let barStartY = null;
+        let lastPayY = null;
         const flushBar = (endY)=>{
-          if(barStartY===null) return;
+          if(barStartY===null || endY===null) return;
+          const topY = Math.min(barStartY, endY);
+          const bottomY = Math.max(barStartY, endY);
           svg.appendChild(svgEl('rect', {
-            x:x0+1, y:Math.min(barStartY,endY), width:trackW-2, height:Math.max(1,Math.abs(endY-barStartY)),
-            fill:cv.color, opacity:0.85
+            x:x0+1,
+            y:topY,
+            width:Math.max(1, trackW-2),
+            height:Math.max(1, bottomY-topY),
+            fill:cv.color,
+            opacity:0.82
           }));
+          // Thin boundary lines make the TOP and BOTTOM of each pay interval clear.
+          svg.appendChild(svgEl('line', {x1:x0+1,y1:topY,x2:x0+trackW-1,y2:topY,stroke:cv.color,'stroke-width':1.2}));
+          svg.appendChild(svgEl('line', {x1:x0+1,y1:bottomY,x2:x0+trackW-1,y2:bottomY,stroke:cv.color,'stroke-width':1.2}));
           barStartY = null;
+          lastPayY = null;
         };
         for(const row of app.las.data){
           const depth = row[dIdx];
           if(depth===null || depth<app.fromDepth-1 || depth>app.toDepth+1) continue;
           const v = row[cv.curveIndex];
           const y = yOf(depth);
-          if(v===1){
-            if(barStartY===null) barStartY = y;
-            lastY = y;
-          } else {
-            flushBar(y);
+          const isPay = v!==null && Number(v) >= 0.5;
+          if(isPay){
+            if(barStartY===null) barStartY = y - (step*app.pxPerUnit)/2;
+            lastPayY = y;
+          } else if(barStartY!==null){
+            flushBar(lastPayY + (step*app.pxPerUnit)/2);
           }
         }
-        flushBar(lastY!==null? lastY + step*app.pxPerUnit : null);
+        if(barStartY!==null && lastPayY!==null){
+          flushBar(lastPayY + (step*app.pxPerUnit)/2);
+        }
         return;
       }
 
