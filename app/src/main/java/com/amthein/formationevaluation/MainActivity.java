@@ -188,22 +188,28 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (webView == null) return;
 
-                PrintManager printManager =
-                        (PrintManager) getSystemService(PRINT_SERVICE);
+                // Force the printable DOM/SVG to the exact calculated track width
+                // before Android creates the print adapter.
+                webView.evaluateJavascript(
+                        "(function(){try{if(typeof preparePrintFit==='function'){preparePrintFit();}return true;}catch(e){return false;}})()",
+                        value -> {
+                            PrintManager printManager =
+                                    (PrintManager) getSystemService(PRINT_SERVICE);
+                            if (printManager == null) return;
 
-                if (printManager == null) return;
+                            String jobName = "LAS Log Viewer";
+                            PrintAttributes attributes = new PrintAttributes.Builder()
+                                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                                    .build();
 
-                String jobName = "LAS Log Viewer";
-
-                PrintAttributes attributes = new PrintAttributes.Builder()
-                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                        .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                        .build();
-
-                printManager.print(
-                        jobName,
-                        webView.createPrintDocumentAdapter(jobName),
-                        attributes
+                            printManager.print(
+                                    jobName,
+                                    webView.createPrintDocumentAdapter(jobName),
+                                    attributes
+                            );
+                        }
                 );
             });
         }
