@@ -586,12 +586,12 @@ const app = {
     this.tracks = []; this.nextTrackId = 1;
   },
 
-  savePlot(){
+    savePlot(){
     if(!this.las){
       alert('Load a LAS file first before saving.');
       return;
     }
-    
+
     // Collect all the data needed to recreate the plot
     const plotData = {
       version: '1.0',
@@ -642,39 +642,83 @@ const app = {
       },
       // Tops/markers
       tops: this.tops.map(t => ({
-  	id: t.id,
-  	label: t.label,
-  	depth: t.depth,
-  	color: t.color,
-  	trackIds: t.trackIds || [],
- 	labelFormat: t.labelFormat || 'default',
-  	lineType: t.lineType || 'dashed'
-       })),
+        id: t.id,
+        label: t.label,
+        depth: t.depth,
+        color: t.color,
+        trackIds: t.trackIds || [],
+        labelFormat: t.labelFormat || 'default',
+        lineType: t.lineType || 'dashed'
+      })),
       nextTrackId: this.nextTrackId,
       nextTopId: this.nextTopId,
       trackWidth: this.trackWidth,
       feComputed: this.feComputed || false
     };
 
-    // Convert to JSON string with nice formatting
     const jsonString = JSON.stringify(plotData, null, 2);
-    
-    // Create a Blob
     const blob = new Blob([jsonString], {type: 'application/json'});
-    
-    // Create download link and trigger download
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
     const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
-    link.download = `${name}.lasplot.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Clean up
-    setTimeout(() => URL.revokeObjectURL(link.href), 100);
-    
-    setStatus(`Plot saved as ${link.download}`);
+    const filename = `${name}.lasplot.json`;
+
+    // IE / Edge legacy
+    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+      try {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+        setStatus(`Plot saved as ${filename}`);
+      } catch (err) {
+        alert('Save failed: ' + err.message);
+      }
+      return;
+    }
+
+    // Modern browsers + mobile webviews: try object URL + anchor click, with fallbacks
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+
+    // Append and try a programmatic click. Some webviews require the node to be in the DOM.
+    document.body.appendChild(a);
+
+    let clicked = false;
+    try {
+      // Preferred: dispatch a MouseEvent (works in more environments than a.click())
+      const ev = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
+      a.dispatchEvent(ev);
+      clicked = true;
+    } catch (err) {
+      try {
+        a.click();
+        clicked = true;
+      } catch (err2) {
+        clicked = false;
+      }
+    }
+
+    // Remove anchor immediately (it does not cancel the download once started)
+    document.body.removeChild(a);
+
+    // Fallback: if the environment doesn't support the download attribute (some webviews),
+    // open the object URL in a new tab/window so the user can long-press and save.
+    setTimeout(() => {
+      // Revoke after a short delay to allow the download to start
+      try { URL.revokeObjectURL(url); } catch (e) { /* ignore */ }
+    }, 1500);
+
+    if (!clicked) {
+      // Last-chance fallback
+      try {
+        window.open(url, '_blank');
+        setStatus(`Plot opened in new tab (use Save/Share to store): ${filename}`);
+      } catch (err) {
+        alert('Failed to start download. You can copy the plot JSON from the console.');
+        console.error(err);
+      }
+    } else {
+      setStatus(`Plot saved as ${filename}`);
+    }
   },
 
   addTrack(typeKey){
