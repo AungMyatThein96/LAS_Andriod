@@ -232,13 +232,21 @@
     margin:0 !important;
   }
   
+  @page{ margin:0 !important; size:auto; }
+
   #printHeader{
-    display:block !important; 
-    padding:auto !important;
+    display:block !important;
+    width:var(--print-track-width) !important;
+    max-width:none !important;
+    box-sizing:border-box !important;
+    padding:0 !important;
+    margin:0 !important;
     page-break-after:avoid;
   }
   
   #trackHeaderWrap {
+    width:var(--print-track-width) !important;
+    max-width:none !important;
     page-break-after: avoid !important;
   }
   .trackHead {
@@ -247,6 +255,8 @@
   }
 
   #trackBodyWrap{
+    width:var(--print-track-width) !important;
+    max-width:none !important;
     overflow:visible !important;
     height:auto !important;
     display:block !important;
@@ -276,14 +286,18 @@
 
 /* Ensure the SVG doesn't overflow */
 #svgCanvas {
-  max-width: 100%;
-  height: auto;
+  width:var(--print-track-width) !important;
+  max-width:none !important;
+  height:auto !important;
+  display:block !important;
 }
-  /* Fix the free space issue */
-  #printHeader{
-    width:100% !important;
-    box-sizing:border-box;
-  }
+
+.viewer,.main,body,html{
+  width:var(--print-track-width) !important;
+  max-width:none !important;
+}
+
+#horizontalTrackScroll{display:none !important;}
 }
 
 </style>
@@ -586,7 +600,7 @@ const app = {
     this.tracks = []; this.nextTrackId = 1;
   },
 
-  savePlot(){
+  async savePlot(){
     if(!this.las){
       alert('Load a LAS file first before saving.');
       return;
@@ -662,19 +676,12 @@ const app = {
     // Create a Blob
     const blob = new Blob([jsonString], {type: 'application/json'});
     
-    // Create download link and trigger download
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    // Android WebView does not reliably support <a download>. Use the native
+    // Android document picker through downloadBlob(), just like PNG/SVG export.
     const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
-    link.download = `${name}.lasplot.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Clean up
-    setTimeout(() => URL.revokeObjectURL(link.href), 100);
-    
-    setStatus(`Plot saved as ${link.download}`);
+    const filename = `${name}.lasplot.json`;
+    await downloadBlob(blob, filename);
+    setStatus(`Plot save requested: ${filename}`);
   },
 
   addTrack(typeKey){
@@ -1424,15 +1431,25 @@ function buildPrintHeader(las, filename){
 // log tracks below it, so on a printed page they visually line up as one
 // block instead of the header spanning the full page width while the tracks
 // stay narrower (or vice versa).
-function syncPrintHeaderWidth(){
+function preparePrintFit(){
   if(!app.las) return;
   const { totalW } = computeColumns();
+  const width = Math.max(1, Math.ceil(totalW));
+  document.documentElement.style.setProperty('--print-track-width', width + 'px');
   const printHeader = document.getElementById('printHeader');
-  
-  // Set the width to match the tracks
-  printHeader.style.width = totalW + 'px';
-  printHeader.style.maxWidth = totalW + 'px';
- }
+  const header = document.getElementById('trackHeaderWrap');
+  const body = document.getElementById('trackBodyWrap');
+  const svg = document.getElementById('svgCanvas');
+  if(printHeader){ printHeader.style.width=width+'px'; printHeader.style.maxWidth='none'; }
+  if(header){ header.style.width=width+'px'; header.style.maxWidth='none'; header.scrollLeft=0; }
+  if(body){ body.style.width=width+'px'; body.style.maxWidth='none'; body.style.overflow='visible'; body.scrollLeft=0; }
+  if(svg){ svg.style.width=width+'px'; svg.style.maxWidth='none'; }
+  return width;
+}
+
+function syncPrintHeaderWidth(){
+  preparePrintFit();
+}
 
 function renderWellHeaderPanel(las, filename){
   const info = getWellHeaderInfo(las, filename);
