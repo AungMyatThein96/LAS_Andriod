@@ -655,7 +655,26 @@ const app = {
       trackWidth: this.trackWidth,
       feComputed: this.feComputed || false
     };
-
+	// Convert to JSON string with nice formatting
+    const jsonString = JSON.stringify(plotData, null, 2);
+    
+    // Create a Blob
+    const blob = new Blob([jsonString], {type: 'application/json'});
+    
+    // Create download link and trigger download
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
+    link.download = `${name}.lasplot.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
+    
+    setStatus(`Plot saved as ${link.download}`);
+  },
     const jsonString = JSON.stringify(plotData, null, 2);
     const blob = new Blob([jsonString], {type: 'application/json'});
     const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
