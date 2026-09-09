@@ -586,12 +586,12 @@ const app = {
     this.tracks = []; this.nextTrackId = 1;
   },
 
-    savePlot(){
+  savePlot(){
     if(!this.las){
       alert('Load a LAS file first before saving.');
       return;
     }
-
+    
     // Collect all the data needed to recreate the plot
     const plotData = {
       version: '1.0',
@@ -642,20 +642,21 @@ const app = {
       },
       // Tops/markers
       tops: this.tops.map(t => ({
-        id: t.id,
-        label: t.label,
-        depth: t.depth,
-        color: t.color,
-        trackIds: t.trackIds || [],
-        labelFormat: t.labelFormat || 'default',
-        lineType: t.lineType || 'dashed'
-      })),
+  	id: t.id,
+  	label: t.label,
+  	depth: t.depth,
+  	color: t.color,
+  	trackIds: t.trackIds || [],
+ 	labelFormat: t.labelFormat || 'default',
+  	lineType: t.lineType || 'dashed'
+       })),
       nextTrackId: this.nextTrackId,
       nextTopId: this.nextTopId,
       trackWidth: this.trackWidth,
       feComputed: this.feComputed || false
     };
-	// Convert to JSON string with nice formatting
+
+    // Convert to JSON string with nice formatting
     const jsonString = JSON.stringify(plotData, null, 2);
     
     // Create a Blob
@@ -675,102 +676,6 @@ const app = {
     
     setStatus(`Plot saved as ${link.download}`);
   },
-    const jsonString = JSON.stringify(plotData, null, 2);
-    const blob = new Blob([jsonString], {type: 'application/json'});
-    const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
-    const filename = `${name}.lasplot.json`;
-
-    // IE / Edge legacy
-    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-      try {
-        window.navigator.msSaveOrOpenBlob(blob, filename);
-        setStatus(`Plot saved as ${filename}`);
-      } catch (err) {
-        alert('Save failed: ' + err.message);
-      }
-      return;
-    }
-
-    // Modern browsers + mobile webviews: try object URL + anchor click, with fallbacks
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener';
-
-    // Append and try a programmatic click. Some webviews require the node to be in the DOM.
-    document.body.appendChild(a);
-
-    let clicked = false;
-    try {
-      // Preferred: dispatch a MouseEvent (works in more environments than a.click())
-      const ev = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
-      a.dispatchEvent(ev);
-      clicked = true;
-    } catch (err) {
-      try {
-        a.click();
-        clicked = true;
-      } catch (err2) {
-        clicked = false;
-      }
-    }
-
-    // Remove anchor immediately (it does not cancel the download once started)
-    document.body.removeChild(a);
-
-    // Add import statements
-import android.content.ContentValues;
-import android.content.Context;
-import android.os.Build;
-import android.provider.MediaStore;
-import android.webkit.JavascriptInterface;
-import android.widget.Toast;
-import android.util.Base64;
-import java.io.OutputStream;
-import java.io.IOException;
-
-// WebAppInterface class
-public class WebAppInterface {
-    private final Context ctx;
-
-    public WebAppInterface(Context c) { this.ctx = c; }
-
-    @JavascriptInterface
-    public void saveFile(String base64, String filename, String mime) {
-        try {
-            byte[] data = Base64.decode(base64, Base64.DEFAULT);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ContentValues values = new ContentValues();
-                values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
-                values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-                values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/");
-
-                android.net.Uri uri = ctx.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                if (uri == null) throw new IOException("Failed to create file uri");
-
-                try (OutputStream out = ctx.getContentResolver().openOutputStream(uri)) {
-                    if (out == null) throw new IOException("Failed to open output stream");
-                    out.write(data);
-                }
-            } else {
-                java.io.File path = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
-                java.io.File file = new java.io.File(path, filename);
-                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
-                    fos.write(data);
-                }
-                // Optionally trigger media scanner
-                android.media.MediaScannerConnection.scanFile(ctx, new String[]{file.getAbsolutePath()}, null, null);
-            }
-
-            Toast.makeText(ctx, "Saved: " + filename, Toast.LENGTH_LONG).show();
-        } catch (IOException e) {
-            e.printStackTrace();
-            Toast.makeText(ctx, "Save failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-},
 
   addTrack(typeKey){
     const id = this.nextTrackId++;
