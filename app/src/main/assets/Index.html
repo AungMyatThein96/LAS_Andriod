@@ -586,17 +586,18 @@ const app = {
     this.tracks = []; this.nextTrackId = 1;
   },
 
-  savePlot(){
-    if(!this.las){
-      alert('Load a LAS file first before saving.');
-      return;
-    }
-    
+  async savePlot(){
+  if(!this.las){
+    alert('Load a LAS file first before saving.');
+    return;
+  }
+
+  try{
     // Collect all the data needed to recreate the plot
     const plotData = {
       version: '1.0',
       filename: this.currentFilename || 'untitled',
-      // LAS data
+
       las: {
         version: this.las.version,
         well: this.las.well,
@@ -606,7 +607,7 @@ const app = {
         wrap: this.las.wrap,
         data: this.las.data
       },
-      // Track settings
+
       tracks: this.tracks.map(t => ({
         id: t.id,
         width: t.width,
@@ -615,6 +616,7 @@ const app = {
         fillCurves: t.fillCurves || false,
         fillColor: t.fillColor || '#e0c04c',
         fillDirection: t.fillDirection || 'lt',
+
         curves: t.curves.map(c => ({
           curveIndex: c.curveIndex,
           color: c.color,
@@ -629,7 +631,7 @@ const app = {
           isCCL: c.isCCL || false
         }))
       })),
-      // View settings
+
       view: {
         fromDepth: this.fromDepth,
         toDepth: this.toDepth,
@@ -640,42 +642,123 @@ const app = {
         depthUnit: this.depthUnit,
         depthCurveIdx: this.depthCurveIdx
       },
-      // Tops/markers
+
       tops: this.tops.map(t => ({
-  	id: t.id,
-  	label: t.label,
-  	depth: t.depth,
-  	color: t.color,
-  	trackIds: t.trackIds || [],
- 	labelFormat: t.labelFormat || 'default',
-  	lineType: t.lineType || 'dashed'
-       })),
+        id: t.id,
+        label: t.label,
+        depth: t.depth,
+        color: t.color,
+        trackIds: t.trackIds || [],
+        labelFormat: t.labelFormat || 'default',
+        lineType: t.lineType || 'dashed'
+      })),
+
       nextTrackId: this.nextTrackId,
       nextTopId: this.nextTopId,
       trackWidth: this.trackWidth,
       feComputed: this.feComputed || false
     };
 
-    // Convert to JSON string with nice formatting
     const jsonString = JSON.stringify(plotData, null, 2);
-    
-    // Create a Blob
-    const blob = new Blob([jsonString], {type: 'application/json'});
-    
-    // Create download link and trigger download
+
+    const blob = new Blob(
+      [jsonString],
+      {type:'application/json'}
+    );
+
+    const name = this.currentFilename
+      ? this.currentFilename.replace(/\.las$/i, '')
+      : 'plot';
+
+    const filename = name + '.lasplot.json';
+
+    /*
+     * IMPORTANT:
+     * Android APK uses the native Android save dialog.
+     * Do NOT use <a download> here.
+     */
+    if(window.Android &&
+       typeof window.Android.saveBlobChunk === 'function'){
+
+      const buffer = new Uint8Array(
+        await blob.arrayBuffer()
+      );
+
+      const chunkSize = 48 * 1024;
+
+      if(buffer.length === 0){
+        window.Android.saveBlobChunk(
+          '',
+          filename,
+          'application/json',
+          true,
+          true
+        );
+      }else{
+        for(
+          let offset = 0;
+          offset < buffer.length;
+          offset += chunkSize
+        ){
+          const part = buffer.subarray(
+            offset,
+            Math.min(offset + chunkSize, buffer.length)
+          );
+
+          let binary = '';
+
+          for(let i=0; i<part.length; i++){
+            binary += String.fromCharCode(part[i]);
+          }
+
+          const base64 = btoa(binary);
+
+          const first = offset === 0;
+          const last =
+            offset + part.length >= buffer.length;
+
+          window.Android.saveBlobChunk(
+            base64,
+            filename,
+            'application/json',
+            first,
+            last
+          );
+        }
+      }
+
+      setStatus(`Save Plot: ${filename}`);
+      return;
+    }
+
+    /*
+     * Browser fallback
+     */
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
-    link.download = `${name}.lasplot.json`;
+
+    link.href = url;
+    link.download = filename;
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    // Clean up
-    setTimeout(() => URL.revokeObjectURL(link.href), 100);
-    
-    setStatus(`Plot saved as ${link.download}`);
-  },
+
+    setTimeout(()=>{
+      URL.revokeObjectURL(url);
+    },1000);
+
+    setStatus(`Plot saved as ${filename}`);
+
+  }catch(err){
+    console.error('Save Plot failed:', err);
+
+    alert(
+      'Save Plot failed: ' +
+      (err && err.message ? err.message : err)
+    );
+  }
+},
 
   addTrack(typeKey){
     const id = this.nextTrackId++;
