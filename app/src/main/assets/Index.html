@@ -232,21 +232,13 @@
     margin:0 !important;
   }
   
-  @page{ margin:0 !important; size:auto; }
-
   #printHeader{
-    display:block !important;
-    width:var(--print-track-width) !important;
-    max-width:none !important;
-    box-sizing:border-box !important;
-    padding:0 !important;
-    margin:0 !important;
+    display:block !important; 
+    padding:auto !important;
     page-break-after:avoid;
   }
   
   #trackHeaderWrap {
-    width:var(--print-track-width) !important;
-    max-width:none !important;
     page-break-after: avoid !important;
   }
   .trackHead {
@@ -255,8 +247,6 @@
   }
 
   #trackBodyWrap{
-    width:var(--print-track-width) !important;
-    max-width:none !important;
     overflow:visible !important;
     height:auto !important;
     display:block !important;
@@ -286,18 +276,14 @@
 
 /* Ensure the SVG doesn't overflow */
 #svgCanvas {
-  width:var(--print-track-width) !important;
-  max-width:none !important;
-  height:auto !important;
-  display:block !important;
+  max-width: 100%;
+  height: auto;
 }
-
-.viewer,.main,body,html{
-  width:var(--print-track-width) !important;
-  max-width:none !important;
-}
-
-#horizontalTrackScroll{display:none !important;}
+  /* Fix the free space issue */
+  #printHeader{
+    width:100% !important;
+    box-sizing:border-box;
+  }
 }
 
 </style>
@@ -601,16 +587,17 @@ const app = {
   },
 
   async savePlot(){
-    if(!this.las){
-      alert('Load a LAS file first before saving.');
-      return;
-    }
-    
+  if(!this.las){
+    alert('Load a LAS file first before saving.');
+    return;
+  }
+
+  try{
     // Collect all the data needed to recreate the plot
     const plotData = {
       version: '1.0',
       filename: this.currentFilename || 'untitled',
-      // LAS data
+
       las: {
         version: this.las.version,
         well: this.las.well,
@@ -620,7 +607,7 @@ const app = {
         wrap: this.las.wrap,
         data: this.las.data
       },
-      // Track settings
+
       tracks: this.tracks.map(t => ({
         id: t.id,
         width: t.width,
@@ -629,6 +616,7 @@ const app = {
         fillCurves: t.fillCurves || false,
         fillColor: t.fillColor || '#e0c04c',
         fillDirection: t.fillDirection || 'lt',
+
         curves: t.curves.map(c => ({
           curveIndex: c.curveIndex,
           color: c.color,
@@ -643,7 +631,7 @@ const app = {
           isCCL: c.isCCL || false
         }))
       })),
-      // View settings
+
       view: {
         fromDepth: this.fromDepth,
         toDepth: this.toDepth,
@@ -654,34 +642,122 @@ const app = {
         depthUnit: this.depthUnit,
         depthCurveIdx: this.depthCurveIdx
       },
-      // Tops/markers
+
       tops: this.tops.map(t => ({
-  	id: t.id,
-  	label: t.label,
-  	depth: t.depth,
-  	color: t.color,
-  	trackIds: t.trackIds || [],
- 	labelFormat: t.labelFormat || 'default',
-  	lineType: t.lineType || 'dashed'
-       })),
+        id: t.id,
+        label: t.label,
+        depth: t.depth,
+        color: t.color,
+        trackIds: t.trackIds || [],
+        labelFormat: t.labelFormat || 'default',
+        lineType: t.lineType || 'dashed'
+      })),
+
       nextTrackId: this.nextTrackId,
       nextTopId: this.nextTopId,
       trackWidth: this.trackWidth,
       feComputed: this.feComputed || false
     };
 
-    // Convert to JSON string with nice formatting
     const jsonString = JSON.stringify(plotData, null, 2);
-    
-    // Create a Blob
-    const blob = new Blob([jsonString], {type: 'application/json'});
-    
-    // Android WebView does not reliably support <a download>. Use the native
-    // Android document picker through downloadBlob(), just like PNG/SVG export.
-    const name = this.currentFilename ? this.currentFilename.replace(/\.las$/i, '') : 'plot';
-    const filename = `${name}.lasplot.json`;
-    await downloadBlob(blob, filename);
-    setStatus(`Plot save requested: ${filename}`);
+
+    const blob = new Blob(
+      [jsonString],
+      {type:'application/json'}
+    );
+
+    const name = this.currentFilename
+      ? this.currentFilename.replace(/\.las$/i, '')
+      : 'plot';
+
+    const filename = name + '.lasplot.json';
+
+    /*
+     * IMPORTANT:
+     * Android APK uses the native Android save dialog.
+     * Do NOT use <a download> here.
+     */
+    if(window.Android &&
+       typeof window.Android.saveBlobChunk === 'function'){
+
+      const buffer = new Uint8Array(
+        await blob.arrayBuffer()
+      );
+
+      const chunkSize = 48 * 1024;
+
+      if(buffer.length === 0){
+        window.Android.saveBlobChunk(
+          '',
+          filename,
+          'application/json',
+          true,
+          true
+        );
+      }else{
+        for(
+          let offset = 0;
+          offset < buffer.length;
+          offset += chunkSize
+        ){
+          const part = buffer.subarray(
+            offset,
+            Math.min(offset + chunkSize, buffer.length)
+          );
+
+          let binary = '';
+
+          for(let i=0; i<part.length; i++){
+            binary += String.fromCharCode(part[i]);
+          }
+
+          const base64 = btoa(binary);
+
+          const first = offset === 0;
+          const last =
+            offset + part.length >= buffer.length;
+
+          window.Android.saveBlobChunk(
+            base64,
+            filename,
+            'application/json',
+            first,
+            last
+          );
+        }
+      }
+
+      setStatus(`Save Plot: ${filename}`);
+      return;
+    }
+
+    /*
+     * Browser fallback
+     */
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(()=>{
+      URL.revokeObjectURL(url);
+    },1000);
+
+    setStatus(`Plot saved as ${filename}`);
+
+  }catch(err){
+    console.error('Save Plot failed:', err);
+
+    alert(
+      'Save Plot failed: ' +
+      (err && err.message ? err.message : err)
+    );
+  }
   },
 
   addTrack(typeKey){
@@ -919,8 +995,13 @@ addTop(){
       const cw = col.width;
       if(col.type==='depth'){
         legendMarkup += `<rect x="${x}" y="${headerH}" width="${cw}" height="${legendH}" fill="#eef3fa" stroke="#7891b3" stroke-width="1"/>`;
-        legendMarkup += `<text x="${x+cw/2}" y="${headerH+18}" font-size="11" text-anchor="middle" fill="#5d6878" font-family="Arial, sans-serif">DEPTH (${escapeXml(app.depthUnit||'')})</text>`;
-        return;
+        // First line: DEPTH
+        legendMarkup += `<text x="${x + cw/2}" y="${headerH + 14}" font-size="11" text-anchor="middle" fill="#5d6878" font-family="Arial, sans-serif">DEPTH</text>`;
+
+        // Second line: Unit (ft, m, etc.)
+        legendMarkup += `<text x="${x + cw/2}" y="${headerH + 28}" font-size="10" text-anchor="middle" fill="#5d6878" font-family="Arial, sans-serif">(${escapeXml(app.depthUnit || '')})</text>`;
+
+      return;
       }
 
       const track = col.track;
@@ -969,7 +1050,7 @@ addTop(){
     return {combined, w, totalH};
   },
 
-  getWellParam  getWellParam(mnem){
+  getWellParam(mnem){
     const item = (this.las.well||[]).find(w=>w.mnem.toUpperCase()===mnem.toUpperCase());
     if(!item) return null;
     const f = parseFloat(item.value);
@@ -1487,25 +1568,15 @@ function buildPrintHeader(las, filename){
 // log tracks below it, so on a printed page they visually line up as one
 // block instead of the header spanning the full page width while the tracks
 // stay narrower (or vice versa).
-function preparePrintFit(){
+function syncPrintHeaderWidth(){
   if(!app.las) return;
   const { totalW } = computeColumns();
-  const width = Math.max(1, Math.ceil(totalW));
-  document.documentElement.style.setProperty('--print-track-width', width + 'px');
   const printHeader = document.getElementById('printHeader');
-  const header = document.getElementById('trackHeaderWrap');
-  const body = document.getElementById('trackBodyWrap');
-  const svg = document.getElementById('svgCanvas');
-  if(printHeader){ printHeader.style.width=width+'px'; printHeader.style.maxWidth='none'; }
-  if(header){ header.style.width=width+'px'; header.style.maxWidth='none'; header.scrollLeft=0; }
-  if(body){ body.style.width=width+'px'; body.style.maxWidth='none'; body.style.overflow='visible'; body.scrollLeft=0; }
-  if(svg){ svg.style.width=width+'px'; svg.style.maxWidth='none'; }
-  return width;
-}
-
-function syncPrintHeaderWidth(){
-  preparePrintFit();
-}
+  
+  // Set the width to match the tracks
+  printHeader.style.width = totalW + 'px';
+  printHeader.style.maxWidth = totalW + 'px';
+ }
 
 function renderWellHeaderPanel(las, filename){
   const info = getWellHeaderInfo(las, filename);
